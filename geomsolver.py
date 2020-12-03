@@ -258,9 +258,6 @@ class Line(torch.nn.Module):
     def r(self):
         return(self.p2.r-self.p1.r)
     
-    def root(self):
-        raise Exception('Override this method.')
-    
     def E(self):
         raise Exception('Override this method.')
     
@@ -291,15 +288,28 @@ class FromPointLine(Line):
     @property
     def u(self):
         return(self.r/self.L)
-
-    def root(self):
-        return(self)
     
     def E(self):
         return(0)
     
     def is_length_constrained(self):
         return(True)
+    
+class FromPointsLine(Line):
+    def __init__(self, linkage, name, parent1, parent2):
+        super(FromPointsLine, self).__init__(linkage, name)
+        self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent1)
+        self.p2 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=parent2)
+        
+    def __repr__(self):
+        label = self.__class__.__name__[:-4]
+        return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
+    
+    def E(self):
+        return(0)
+    
+    def is_length_constrained(self):
+        return(False)
     
 class OnLinePoint(Point):
     def __init__(self, linkage, name, parent, alpha):
@@ -341,7 +351,7 @@ class OnPointLine(Line):
         return(True)
     
 class Linkage():
-    def __init__(self):       
+    def __init__(self, show_origin=True):       
         self.points = Munch(torch.nn.ModuleDict({}))
         self.lines = Munch(torch.nn.ModuleDict({}))
         #self.angles = torch.nn.ModuleDict({})
@@ -355,7 +365,7 @@ class Linkage():
                 for t in itertools.product(letters, repeat=n):
                     self.names[_type].append(''.join(t))
             self.names[_type] = iter(self.names[_type][1:])
-        self.plot = LinkagePlot(self)
+        self.plot = LinkagePlot(self, show_origin)
         self.tolerance = 0.00001
     
     ######################################## Points ########################################
@@ -395,6 +405,12 @@ class Linkage():
     def add_frompointline(self, parent, L, theta, phi=None, ux=None, uz=None):
         name = next(self.names['line'])
         self.lines[name] = FromPointLine(self, name, parent, L, theta, phi, ux, uz)
+        self.plot.update()
+        return(self.lines[name])
+    
+    def add_frompointsline(self, parent1, parent2):
+        name = next(self.names['line'])
+        self.lines[name] = FromPointsLine(self, name, parent1, parent2)
         self.plot.update()
         return(self.lines[name])
     
@@ -451,7 +467,7 @@ class Linkage():
         time.sleep(0.01)
         
 class LinkagePlot():
-    def __init__(self, linkage):
+    def __init__(self, linkage, show_origin=True):
         self.linkage = linkage
         self.origin = torch.tensor([0,0,0])
         self.E_list = [1.0]
@@ -469,9 +485,10 @@ class LinkagePlot():
         self.ax1.set_title('Configuration')
         self.ax2.set_title('log10(E)')
         
-        self.ax1.scatter(
-            [self.origin[0]], [self.origin[1]],
-            marker='+', s=50, c='black', alpha=1, label='origin')
+        if show_origin:
+            self.ax1.scatter(
+                [self.origin[0]], [self.origin[1]],
+                marker='+', s=50, c='black', alpha=1, label='origin')
         
         self.points, self.anchors, self.lines = {}, {}, {}
             
