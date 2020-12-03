@@ -471,7 +471,7 @@ class LinkagePlot():
         
         self.ax1.scatter(
             [self.origin[0]], [self.origin[1]],
-            marker='o', s=20, c='red', alpha=1, label='origin')
+            marker='+', s=50, c='black', alpha=1, label='origin')
         
         self.points, self.anchors, self.lines = {}, {}, {}
             
