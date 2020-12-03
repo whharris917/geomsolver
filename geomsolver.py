@@ -309,6 +309,8 @@ class FromPointsLine(Line):
         return(0)
     
     def is_length_constrained(self):
+        if self.p1.root().__class__.__name__ is 'AnchorPoint' and self.p2.root().__class__.__name__ is 'AnchorPoint':
+            return(True)
         return(False)
     
 class OnLinePoint(Point):
@@ -394,7 +396,7 @@ class Linkage():
         self.plot.update()
         return(self.points[name])
     
-    def add_onlinepoint(self, parent, alpha):
+    def add_onlinepoint(self, parent, alpha=None):
         name = next(self.names['point'])
         self.points[name] = OnLinePoint(self, name, parent, alpha)
         self.plot.update()
