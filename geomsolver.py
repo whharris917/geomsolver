@@ -138,8 +138,8 @@ class CalculatedPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta * np.pi/180
-        phi = self.parent.phi * np.pi/180
+        theta = self.parent.theta #* np.pi/180
+        phi = self.parent.phi #* np.pi/180
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -182,8 +182,8 @@ class CalculatedAnteriorPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta * np.pi/180
-        phi = self.parent.phi * np.pi/180
+        theta = self.parent.theta #* np.pi/180
+        phi = self.parent.phi #* np.pi/180
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -226,8 +226,8 @@ class CalculatedPosteriorPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta * np.pi/180
-        phi = self.parent.phi * np.pi/180
+        theta = self.parent.theta #* np.pi/180
+        phi = self.parent.phi #* np.pi/180
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -273,9 +273,10 @@ class FromPointLine(Line):
         super(FromPointLine, self).__init__(linkage, name)
         self.parent = parent
         self.L = L
-        self.theta = torch.nn.Parameter(torch.tensor([theta]).to(torch.float))
-        phi = 90 if phi is None else phi
-        self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
+        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180]).to(torch.float))
+        phi = np.pi/2 if phi is None else phi*np.pi/180
+        #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
+        self.phi = torch.tensor([phi], requires_grad=False).to(torch.float)
         self.ux = ux
         self.uz = uz
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
@@ -300,18 +301,30 @@ class FromPointsLine(Line):
         super(FromPointsLine, self).__init__(linkage, name)
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent1)
         self.p2 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=parent2)
+        self.target_length = None
         
     def __repr__(self):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
     def E(self):
+        if self.is_length_constrained():
+            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2).pow(0.5)
+            #E = torch.abs((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length)
+            return(E)
         return(0)
     
     def is_length_constrained(self):
-        if self.p1.root().__class__.__name__ is 'AnchorPoint' and self.p2.root().__class__.__name__ is 'AnchorPoint':
+        if self.target_length is not None:
             return(True)
         return(False)
+    
+    def constrain_length(self, L):
+        if self.p1.root().__class__.__name__ is 'AnchorPoint':
+            if self.p2.root().__class__.__name__ is 'AnchorPoint':
+                raise Exception('Cannot constrain the length of a line with anchored endpoints.')
+        self.target_length = L
+        self.linkage.update()
     
 class OnLinePoint(Point):
     def __init__(self, linkage, name, parent, alpha):
@@ -339,9 +352,10 @@ class OnPointLine(Line):
         super(OnPointLine, self).__init__(linkage, name)
         self.parent = parent
         self.L = L
-        self.theta = torch.nn.Parameter(torch.tensor([theta]).to(torch.float))
-        phi = 90 if phi is None else phi
-        self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
+        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180]).to(torch.float))
+        phi = np.pi/2 if phi is None else phi*np.pi/180
+        #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
+        self.phi = torch.tensor([phi], requires_grad=False).to(torch.float)
         self.ux = ux
         self.uz = uz
         beta = 0.5 if beta is None else beta
@@ -446,15 +460,15 @@ class Linkage():
     def energy(self):
         E = 0.0
         for point in self.points.values():
-            E += line.energy()
+            E += point.E()
         for line in self.lines.values():
-            E += line.energy()
+            E += line.E()
         #for angle in self.angles.values():
         #    E += angle.energy()
         return(E)
             
     def update(self, max_num_epochs=10000):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001) #SGD
+        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
             E = self.energy()
@@ -463,8 +477,9 @@ class Linkage():
             self.plot.E_list.append(E.item())
             if E <= self.tolerance:
                 break
-        if (E > self.tolerance or E.isnan()):
-            raise Exception('Could not solve all constraints.')
+        if False:
+            if (E > self.tolerance or E.isnan()):
+                raise Exception('Could not solve all constraints.')
         self.plot.update()
         time.sleep(0.01)
         
