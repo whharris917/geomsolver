@@ -138,8 +138,8 @@ class CalculatedPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta #* np.pi/180
-        phi = self.parent.phi #* np.pi/180
+        theta = self.parent.theta*10 #* np.pi/180
+        phi = self.parent.phi*10 #* np.pi/180
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -182,8 +182,8 @@ class CalculatedAnteriorPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta #* np.pi/180
-        phi = self.parent.phi #* np.pi/180
+        theta = self.parent.theta*10 #* np.pi/180
+        phi = self.parent.phi*10 #* np.pi/180
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -226,8 +226,8 @@ class CalculatedPosteriorPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta #* np.pi/180
-        phi = self.parent.phi #* np.pi/180
+        theta = self.parent.theta*10 #* np.pi/180
+        phi = self.parent.phi*10 #* np.pi/180
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -273,10 +273,10 @@ class FromPointLine(Line):
         super(FromPointLine, self).__init__(linkage, name)
         self.parent = parent
         self.L = L
-        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180]).to(torch.float))
+        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180/10]).to(torch.float))
         phi = np.pi/2 if phi is None else phi*np.pi/180
         #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
-        self.phi = torch.tensor([phi], requires_grad=False).to(torch.float)
+        self.phi = torch.tensor([phi/10], requires_grad=False).to(torch.float)
         self.ux = ux
         self.uz = uz
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
@@ -309,7 +309,7 @@ class FromPointsLine(Line):
     
     def E(self):
         if self.is_length_constrained():
-            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2).pow(0.5)
+            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2) #.pow(0.5)
             #E = torch.abs((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length)
             return(E)
         return(0)
@@ -352,10 +352,10 @@ class OnPointLine(Line):
         super(OnPointLine, self).__init__(linkage, name)
         self.parent = parent
         self.L = L
-        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180]).to(torch.float))
+        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180/10]).to(torch.float))
         phi = np.pi/2 if phi is None else phi*np.pi/180
         #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
-        self.phi = torch.tensor([phi], requires_grad=False).to(torch.float)
+        self.phi = torch.tensor([phi/10], requires_grad=False).to(torch.float)
         self.ux = ux
         self.uz = uz
         beta = 0.5 if beta is None else beta
@@ -382,7 +382,7 @@ class Linkage():
                     self.names[_type].append(''.join(t))
             self.names[_type] = iter(self.names[_type][1:])
         self.plot = LinkagePlot(self, show_origin)
-        self.tolerance = 0.00001
+        self.tolerance = 0.0001
     
     ######################################## Points ########################################
     
@@ -468,7 +468,7 @@ class Linkage():
         return(E)
             
     def update(self, max_num_epochs=10000):
-        optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+        optimizer = torch.optim.SGD(self.parameters(), lr=0.001)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
             E = self.energy()
