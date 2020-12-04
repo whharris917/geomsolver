@@ -498,7 +498,7 @@ class LinkagePlot():
         
         # Set up figure and axis
         self.size = 5
-        self.lim = 5
+        self.lim = 4
         self.fig = plt.figure(figsize=(2*self.size,self.size))
         self.ax1 = self.fig.add_subplot(121, autoscale_on=False,
             xlim=(-self.lim,self.lim),
