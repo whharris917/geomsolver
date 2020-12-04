@@ -25,8 +25,8 @@ class Point(torch.nn.Module):
     def E(self):
         raise Exception('Override this method.')
         
-    def add_frompointline(self, L, theta, phi=None, ux=None, uz=None):
-        new_line = self.linkage.add_frompointline(self, L, theta, phi, ux, uz)
+    def add_frompointline(self, L, theta, phi=None, ux=None, uz=None, locked=False):
+        new_line = self.linkage.add_frompointline(self, L, theta, phi, ux, uz, locked)
         return(new_line)
     
     def add_onpointline(self, L, theta, phi=None, ux=None, uz=None, beta=None):
@@ -269,11 +269,15 @@ class Line(torch.nn.Module):
         return(new_point)
     
 class FromPointLine(Line):
-    def __init__(self, linkage, name, parent, L, theta, phi=None, ux=None, uz=None):
+    def __init__(self, linkage, name, parent, L, theta, phi=None, ux=None, uz=None, locked=False):
         super(FromPointLine, self).__init__(linkage, name)
         self.parent = parent
+        self.locked = locked
         self.L = L
-        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180/10]).to(torch.float))
+        if self.locked:
+            self.theta = torch.tensor([theta*np.pi/180/10], requires_grad=False).to(torch.float)
+        else:
+            self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180/10]).to(torch.float))
         phi = np.pi/2 if phi is None else phi*np.pi/180
         #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
         self.phi = torch.tensor([phi/10], requires_grad=False).to(torch.float)
@@ -308,7 +312,7 @@ class FromPointsLine(Line):
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
     def E(self):
-        if self.is_length_constrained():
+        if self.is_length_constrained() and self.target_length is not None:
             E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2) #.pow(0.5)
             #E = torch.abs((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length)
             return(E)
@@ -317,6 +321,9 @@ class FromPointsLine(Line):
     def is_length_constrained(self):
         if self.target_length is not None:
             return(True)
+        elif self.p1.root().__class__.__name__ is 'AnchorPoint':
+            if self.p2.root().__class__.__name__ is 'AnchorPoint':
+                return(True)
         return(False)
     
     def constrain_length(self, L):
@@ -418,9 +425,9 @@ class Linkage():
     
     ######################################## Lines #########################################
     
-    def add_frompointline(self, parent, L, theta, phi=None, ux=None, uz=None):
+    def add_frompointline(self, parent, L, theta, phi=None, ux=None, uz=None, locked=False):
         name = next(self.names['line'])
-        self.lines[name] = FromPointLine(self, name, parent, L, theta, phi, ux, uz)
+        self.lines[name] = FromPointLine(self, name, parent, L, theta, phi, ux, uz, locked)
         self.plot.update()
         return(self.lines[name])
     
