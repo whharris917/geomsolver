@@ -1,4 +1,5 @@
 import numpy as np
+from scipy import optimize
 import pandas as pd
 import torch, IPython, itertools, string
 import random, time, warnings
@@ -6,11 +7,24 @@ import matplotlib.pyplot as plt
 from matplotlib import animation
 from munch import Munch
 
+class Parameter(torch.nn.Module):
+    def __init__(self, tensor, locked=False):
+        super(Parameter, self).__init__()
+        self.locked = locked
+        if self.locked:
+            self.tensor = torch.tensor(tensor, requires_grad=False).to(torch.float)
+        else:
+            self.tensor = torch.nn.Parameter(torch.tensor(tensor).to(torch.float)) 
+        
+    def __call__(self):
+        return(self.tensor)
+
 class Point(torch.nn.Module):
     def __init__(self, linkage, name):
         super(Point, self).__init__()
         self.linkage = linkage
         self.name = name
+        self.params = Munch({})
         
     def __repr__(self):
         raise Exception('Override this method.')
@@ -36,7 +50,7 @@ class Point(torch.nn.Module):
 class AtPoint(Point):
     def __init__(self, linkage, name, at):
         super(AtPoint, self).__init__(linkage, name)
-        self._r = torch.nn.Parameter(torch.tensor(at).to(torch.float))
+        self.params.r = Parameter(at, locked=False)
     
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -44,8 +58,8 @@ class AtPoint(Point):
     
     @property
     def r(self):
-        return(self._r)
-
+        return(self.params.r())
+    
     def root(self):
         return(self)
     
@@ -55,7 +69,7 @@ class AtPoint(Point):
 class AnchorPoint(Point):
     def __init__(self, linkage, name, at):
         super(AnchorPoint, self).__init__(linkage, name)
-        self._r = torch.tensor(at, requires_grad=False)
+        self.params.r = Parameter(at, locked=True)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -63,7 +77,7 @@ class AnchorPoint(Point):
         
     @property
     def r(self):
-        return(self._r)
+        return(self.params.r())
         
     def root(self):
         return(self)
@@ -93,7 +107,7 @@ class OnPointPoint(Point):
 class ToPointPoint(Point):
     def __init__(self, linkage, name, at, parent):
         super(ToPointPoint, self).__init__(linkage, name)
-        self._r = torch.nn.Parameter(torch.tensor(at).to(torch.float))
+        self.params.r = Parameter(at, locked=False)
         self.parent = parent
         
     def __repr__(self):
@@ -102,7 +116,7 @@ class ToPointPoint(Point):
         
     @property
     def r(self):
-        return(self._r)
+        return(self.params.r())
     
     def root(self):
         return(self)
@@ -138,8 +152,8 @@ class CalculatedPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta*10 #* np.pi/180
-        phi = self.parent.phi*10 #* np.pi/180
+        theta = self.parent.params.theta()*10
+        phi = self.parent.params.phi()*10
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -147,7 +161,7 @@ class CalculatedPoint(Point):
         R = torch.stack([ax, ay, az], dim=1)
         r = self.parent.p1.r + torch.matmul(R,dr)
         return(r)
-
+    
     def root(self):
         return(self)
     
@@ -182,16 +196,16 @@ class CalculatedAnteriorPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta*10 #* np.pi/180
-        phi = self.parent.phi*10 #* np.pi/180
+        theta = self.parent.params.theta()*10
+        phi = self.parent.params.phi()*10
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
         dr = self.parent.L * torch.cat([ux, uy, uz])
         R = torch.stack([ax, ay, az], dim=1)
-        r = self.parent.parent.r - self.parent.beta * torch.matmul(R,dr)
+        r = self.parent.parent.r - self.parent.params.beta() * torch.matmul(R,dr)
         return(r)
-
+    
     def root(self):
         return(self)
     
@@ -226,16 +240,16 @@ class CalculatedPosteriorPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        theta = self.parent.theta*10 #* np.pi/180
-        phi = self.parent.phi*10 #* np.pi/180
+        theta = self.parent.params.theta()*10
+        phi = self.parent.params.phi()*10
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
         dr = self.parent.L * torch.cat([ux, uy, uz])
         R = torch.stack([ax, ay, az], dim=1)
-        r = self.parent.parent.r + (1-self.parent.beta) * torch.matmul(R,dr)
+        r = self.parent.parent.r + (1-self.parent.params.beta()) * torch.matmul(R,dr)
         return(r)
-
+    
     def root(self):
         return(self)
     
@@ -250,6 +264,7 @@ class Line(torch.nn.Module):
         self.parent = None
         self.p1 = None
         self.p2 = None
+        self.params = Munch({})
         
     def __repr__(self):
         raise Exception('Override this method.')
@@ -274,13 +289,9 @@ class FromPointLine(Line):
         self.parent = parent
         self.locked = locked
         self.L = L
-        if self.locked:
-            self.theta = torch.tensor([theta*np.pi/180/10], requires_grad=False).to(torch.float)
-        else:
-            self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180/10]).to(torch.float))
+        self.params.theta = Parameter([theta*np.pi/180/10], locked=self.locked)
         phi = np.pi/2 if phi is None else phi*np.pi/180
-        #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
-        self.phi = torch.tensor([phi/10], requires_grad=False).to(torch.float)
+        self.params.phi = Parameter([phi/10], locked=True)
         self.ux = ux
         self.uz = uz
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
@@ -313,8 +324,7 @@ class FromPointsLine(Line):
     
     def E(self):
         if self.is_length_constrained() and self.target_length is not None:
-            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2) #.pow(0.5)
-            #E = torch.abs((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length)
+            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
             return(E)
         return(0)
     
@@ -338,7 +348,7 @@ class OnLinePoint(Point):
         super(OnLinePoint, self).__init__(linkage, name)
         self.parent = parent
         alpha = 0.5 if alpha is None else alpha
-        self.alpha = torch.nn.Parameter(torch.tensor([alpha]))
+        self.params.alpha = Parameter([alpha], locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -346,7 +356,7 @@ class OnLinePoint(Point):
     
     @property
     def r(self):
-        return((1-self.alpha)*self.parent.p1.r+self.alpha*self.parent.p2.r)
+        return((1-self.params.alpha())*self.parent.p1.r+self.params.alpha()*self.parent.p2.r)
 
     def root(self):
         return(self)
@@ -359,14 +369,13 @@ class OnPointLine(Line):
         super(OnPointLine, self).__init__(linkage, name)
         self.parent = parent
         self.L = L
-        self.theta = torch.nn.Parameter(torch.tensor([theta*np.pi/180/10]).to(torch.float))
+        self.params.theta = Parameter([theta*np.pi/180/10], locked=False)
         phi = np.pi/2 if phi is None else phi*np.pi/180
-        #self.phi = torch.nn.Parameter(torch.tensor([phi]).to(torch.float))
-        self.phi = torch.tensor([phi/10], requires_grad=False).to(torch.float)
+        self.params.phi = Parameter([phi/10], locked=True)
         self.ux = ux
         self.uz = uz
         beta = 0.5 if beta is None else beta
-        self.beta = torch.nn.Parameter(torch.tensor([beta]).to(torch.float))
+        self.params.beta = Parameter([beta], locked=False)
         self.p1 = CalculatedAnteriorPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
         self.p2 = CalculatedPosteriorPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
         
@@ -377,7 +386,6 @@ class Linkage():
     def __init__(self, show_origin=True):       
         self.points = Munch(torch.nn.ModuleDict({}))
         self.lines = Munch(torch.nn.ModuleDict({}))
-        #self.angles = torch.nn.ModuleDict({})
         self.names = {}
         for _type in ['point', 'line']:
             self.names[_type] = []
@@ -454,14 +462,20 @@ class Linkage():
     def M(self):
         return(len(self.lines))
      
-    def parameters(self):
-        parameters = []
+    def param_dict(self):
+        parameters = {}
         for point in self.points.values():
-            for param in point.parameters():
-                parameters.append(param)
+            for param_name in point.params.keys():
+                param = point.params[param_name]
+                for counter, _param in enumerate(param.parameters()):
+                    label = 'point_{}_{}_{}'.format(point.name, param_name, counter)
+                    parameters[label] = _param
         for line in self.lines.values():
-            for param in line.parameters():
-                parameters.append(param)
+            for param_name in line.params.keys():
+                param = line.params[param_name]
+                for counter, _param in enumerate(param.parameters()):
+                    label = 'line_{}_{}_{}'.format(line.name, param_name, counter)
+                    parameters[label] = _param
         return(parameters)
        
     def energy(self):
@@ -470,12 +484,29 @@ class Linkage():
             E += point.E()
         for line in self.lines.values():
             E += line.E()
-        #for angle in self.angles.values():
-        #    E += angle.energy()
         return(E)
-            
+          
+    def _energy(self, x):
+        E = 0
+        return(E)
+        
+    def _forces(self, x):
+        F = np.zeros(len(x))
+        return(F)
+        
+    def _error_vec(self, x):
+        f = np.zeros(len(x))
+        f[0] += self._energy(x)
+        return(x)
+        
+    def _error_vec_jacobian(x):
+        F = self._forces(x)
+        J = np.zeros((len(x),len(x)))
+        J[0] += F
+        return(J)
+        
     def update(self, max_num_epochs=10000):
-        optimizer = torch.optim.SGD(self.parameters(), lr=0.001)
+        optimizer = torch.optim.SGD(self.param_dict().values(), lr=0.001)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
             E = self.energy()
@@ -489,6 +520,16 @@ class Linkage():
                 raise Exception('Could not solve all constraints.')
         self.plot.update()
         time.sleep(0.01)
+        
+    '''
+    def update(self):
+        solver = optimize.root(_error_vec, x0=[0,0,0], jac=_error_vec_jacobian, method='hybr')
+        self.plot.E_list.append(E.item())
+        if (E > self.tolerance or E.isnan()):
+            raise Exception('Could not solve all constraints.')
+        self.plot.update()
+        time.sleep(0.01)
+    '''
         
 class LinkagePlot():
     def __init__(self, linkage, show_origin=True):
