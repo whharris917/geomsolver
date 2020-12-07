@@ -370,6 +370,7 @@ class FromPointsLine(Line):
         if self.is_length_constrained() and self.target_length is not None:
             #E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
             E = (self.p2.r-self.p1.r).pow(2).sum()-torch.tensor(self.target_length).pow(2)
+            E = (torch.abs(E)).pow(0.5)
             return(E)
         return(0)
     
