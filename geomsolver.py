@@ -2,30 +2,58 @@ import numpy as np
 from scipy import optimize
 import pandas as pd
 import torch, IPython, itertools, string
-import random, time, warnings
+import random, time, warnings, copy
 import matplotlib.pyplot as plt
 from matplotlib import animation
 from munch import Munch
+from ipywidgets import interact, interactive, fixed, interact_manual
+import ipywidgets as widgets
 
-class Parameter(torch.nn.Module):
+class BaseParameter(torch.nn.Module):
     def __init__(self, tensor, locked=False):
-        super(Parameter, self).__init__()
+        super(BaseParameter, self).__init__()
         self.locked = locked
+        self._tensor = None
+        self.tensor = tensor
+        
+    def __call__(self):
+        return(self.tensor)
+    
+    def __repr__(self):
+        return('{}({}, locked={})'.format(self.__class__.__name__, str(self.tensor), self.locked))
+    
+    @property
+    def tensor(self):
+        return(self._tensor)
+    
+    @tensor.setter
+    def tensor(self, _tensor):
+        if type(_tensor) is not list:
+            _tensor = [_tensor]
         if self.locked:
-            self.tensor = torch.tensor(tensor, requires_grad=False).to(torch.float)
+            self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float)
         else:
-            self.tensor = torch.nn.Parameter(torch.tensor(tensor).to(torch.float)) 
+            self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float)) 
         
-    def __call__(self):
-        return(self.tensor)
-
-class ManualParameter():
+    def lock(self):
+        self.locked = True
+        value = copy.deepcopy(self._tensor.tolist())
+        del(self._tensor)
+        self.tensor = value
+    
+    def unlock(self):
+        self.locked = False
+        value = copy.deepcopy(self._tensor.tolist())
+        del(self._tensor)
+        self.tensor = value
+        
+class Parameter(BaseParameter):
     def __init__(self, tensor, locked=False):
-        self.locked = locked
-        self.tensor = torch.tensor(tensor, dtype=torch.float, requires_grad=True)
+        super(Parameter, self).__init__(tensor, locked)
         
-    def __call__(self):
-        return(self.tensor)
+class ManualParameter(BaseParameter):
+    def __init__(self, tensor, locked=False):
+        super(ManualParameter, self).__init__(tensor, locked)
     
 class Point(torch.nn.Module):
     def __init__(self, linkage, name):
@@ -55,6 +83,25 @@ class Point(torch.nn.Module):
     def add_onpointline(self, L, theta, phi=None, ux=None, uz=None, beta=None):
         new_line = self.linkage.add_onpointline(self, L, theta, phi, ux, uz, beta)
         return(new_line)
+    
+    def set_parameter(self, param_name, value):
+        self.params[param_name].tensor = value
+        self._params[param_name].tensor = value
+        self.linkage.plot.update()
+        try:
+            self.linkage.update()
+        except:
+            pass
+        
+    def lock(self):
+        for param_name in self.params.keys():
+            self.params[param_name].lock()
+            self._params[param_name].lock()
+            
+    def unlock(self):
+        for param_name in self.params.keys():
+            self.params[param_name].unlock()
+            self._params[param_name].unlock()
     
 class AtPoint(Point):
     def __init__(self, linkage, name, at):
@@ -325,6 +372,25 @@ class Line(torch.nn.Module):
         new_point = self.linkage.add_onlinepoint(self, alpha)
         return(new_point)
     
+    def set_parameter(self, param_name, value):
+        self.params[param_name].tensor = value
+        self._params[param_name].tensor = value
+        self.linkage.plot.update()
+        try:
+            self.linkage.update()
+        except:
+            pass
+        
+    def lock(self):
+        for param_name in self.params.keys():
+            self.params[param_name].lock()
+            self._params[param_name].lock()
+            
+    def unlock(self):
+        for param_name in self.params.keys():
+            self.params[param_name].unlock()
+            self._params[param_name].unlock()
+    
 class FromPointLine(Line):
     def __init__(self, linkage, name, parent, L, theta, phi=None, ux=None, uz=None, locked=False):
         super(FromPointLine, self).__init__(linkage, name)
@@ -394,8 +460,8 @@ class OnLinePoint(Point):
         super(OnLinePoint, self).__init__(linkage, name)
         self.parent = parent
         alpha = 0.5 if alpha is None else alpha
-        self.params.alpha = Parameter([alpha], locked=True) #False
-        self._params.alpha = ManualParameter([alpha], locked=True) #False
+        self.params.alpha = Parameter([alpha], locked=False)
+        self._params.alpha = ManualParameter([alpha], locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -516,7 +582,16 @@ class Linkage():
     @property
     def M(self):
         return(len(self.lines))
-     
+    
+    def set_parameter(self, obj_type, obj_name, param_name, value):
+        if obj_type in ['Point', 'point']:
+            obj = self.points[obj_name]
+        elif obj_type in ['Line', 'line']:
+            obj = self.lines[obj_name]
+        else:
+            raise Exception('Object type must be Point or Line.')
+        obj.set_parameter(param_name, value)
+    
     def get_param_dict(self):
         parameters = {}
         for point in self.points.values():
@@ -577,11 +652,16 @@ class Linkage():
     def apply_manual_params(self):
         for point in self.points.values():
             for param_name in point.params.keys():
-                point.params[param_name] = Parameter(point._params[param_name].tensor.tolist(), locked=False) 
+                #point.set_parameter(param_name, point._params[param_name].tensor.tolist())
+                point.params[param_name] = Parameter(point._params[param_name].tensor.tolist(), 
+                                                     locked=point._params[param_name].locked) 
         for line in self.lines.values():
             for param_name in line.params.keys():
-                line.params[param_name] = Parameter(line._params[param_name].tensor.tolist(), locked=False) 
+                #line.set_parameter(param_name, line._params[param_name].tensor.tolist())
+                line.params[param_name] = Parameter(line._params[param_name].tensor.tolist(),
+                                                    locked=line._params[param_name].locked) 
       
+    '''
     def get_dof_tensor(self):
         manual_param_dict = self.get_manual_param_dict()
         d = 0
@@ -591,6 +671,7 @@ class Linkage():
         for counter, manual_param in enumerate(manual_param_dict.values()):
             dof_tensor[counter] += manual_param.tensor[0]  
         return(dof_tensor)
+    '''
     
     def _energy(self, x):
         self.set_manual_params(x)
@@ -643,13 +724,87 @@ class Linkage():
         solver = optimize.root(self._error_vec, x0=x0, jac=self._error_vec_jacobian, method='hybr',
                                options={'maxfev': 1000, 'factor': 0.1, 'xtol': 1.0e-04}) 
         xf = solver.x
-        #print(8); IPython.embed()
         self.apply_manual_params()
-        if not solver.success: #(E > self.tolerance or np.isnan(E)):
+        if not solver.success:
             raise Exception('Could not solve all constraints.')
         self.plot.E_list.append(0)
         self.plot.update()
         time.sleep(0.01)
+        
+    def create_controller(self, manual=False):
+        
+        linkage = self
+
+        if False:
+            obj_type_widget = widgets.Dropdown(options=['obj_type', 'point', 'line'])
+            obj_name_widget = widgets.Dropdown(options=['obj_name'])
+            param_name_widget = widgets.Dropdown(options=['param_name'])
+        else:
+            obj_type_widget = widgets.Dropdown(options=['point', 'line'])
+            obj_name_widget = widgets.Dropdown(options=['D'])
+            param_name_widget = widgets.Dropdown(options=['alpha'])    
+        value_widget = widgets.FloatSlider(min=0, max=1, step=0.05, value=0.15)
+
+        def update_obj_name_options(*args):
+            avail_obj_names = []
+            if obj_type_widget.value is 'point':
+                for point in linkage.points.values():
+                    if list(point.params):
+                        avail_obj_names.append(point.name)
+            elif obj_type_widget.value is 'line':
+                for line in linkage.lines.values():
+                    if list(line.params):
+                        avail_obj_names.append(line.name)
+            else:
+                avail_obj_names.append('obj_name')
+            obj_name_widget.options = avail_obj_names
+        obj_type_widget.observe(update_obj_name_options, 'value')
+
+        def update_param_name_options(*args):
+            if obj_type_widget.value is 'point':
+                obj = linkage.points[obj_name_widget.value]
+                param_name_widget.options = obj.params.keys()
+            elif obj_type_widget.value is 'line':
+                obj = linkage.lines[obj_name_widget.value]
+                param_name_widget.options = obj.params.keys()
+            else:
+                param_name_widget.options = ['param_name']
+        obj_name_widget.observe(update_param_name_options, 'value')
+
+        def update_param_bounds(*args):
+            if param_name_widget.value in ['alpha', 'beta']:
+                _min = 0
+                _max = 1
+                _value = 0.15
+            elif param_name_widget.value in ['theta', 'phi']:
+                _min = 0
+                _max = (2*np.pi)/10
+                _value = (np.pi/2)/10
+            else:
+                _min = 0
+                _max = 1
+                _value = 0.5
+            value_widget.min = _min
+            value_widget.max = _max
+            value_widget.value = _value
+        param_name_widget.observe(update_param_bounds, 'value')
+
+        if manual:
+            interact_manual(
+                linkage.set_parameter,
+                obj_type=obj_type_widget,
+                obj_name=obj_name_widget,
+                param_name=param_name_widget,
+                value=value_widget
+            );
+        else:
+            interact(
+                linkage.set_parameter,
+                obj_type=obj_type_widget,
+                obj_name=obj_name_widget,
+                param_name=param_name_widget,
+                value=value_widget
+            );
         
 class LinkagePlot():
     def __init__(self, linkage, show_origin=True):
@@ -668,7 +823,7 @@ class LinkagePlot():
             xlim=(0,1),
             ylim=(0,1))
         self.ax1.set_title('Configuration')
-        self.ax2.set_title('log10(E)')
+        self.ax2.set_title('Energy')
         
         if show_origin:
             self.ax1.scatter(
@@ -677,9 +832,33 @@ class LinkagePlot():
         
         self.points, self.anchors, self.lines = {}, {}, {}
             
-        self.lnE_line, = self.ax2.plot([], [], 'b-', markersize=3, lw=0.5, label='log10(E)')
+        #self.lnE_line, = self.ax2.plot([], [], 'b-', markersize=3, lw=0.5, label='log10(E)')
         time_template = ' t={:.0f}\n E={:.2f}\n T={:.5f}\n theta={:.0f}\n'
         self.time_text = self.ax1.text(0.05, 0.7, '', transform=self.ax1.transAxes)
+        
+    def create_energy_plot(self):
+        if 'd' not in self.linkage.lines.keys():
+            return()
+        if self.linkage.lines['d'].target_length is None:
+            return()
+        L = 4
+        alpha = self.linkage.points['D'].params.alpha().item()
+        d_target = self.linkage.lines['d'].target_length
+        theta = np.linspace(0, 2*np.pi, 1000)
+        beta = np.linspace(0, 2*np.pi, 1000)
+        THETA, BETA = np.meshgrid(theta, beta)
+        d2 = (L**2/16)*((2-4*alpha+np.cos(THETA)+np.cos(BETA))**2 + (np.sin(THETA)+np.sin(BETA))**2)
+        E = ((d2 - d_target**2)**2)**0.5
+        E = E**0.5
+        self.ax2.contourf(THETA, BETA, E, levels=50)
+        self.ax2.set_xlim([0,2*np.pi])
+        self.ax2.set_ylim([0,2*np.pi])
+        self.ax2.set_xlabel('theta (rad)')
+        self.ax2.set_ylabel('beta (rad)')
+        theta = self.linkage.lines['b'].params.theta().item()*10
+        beta = self.linkage.lines['c'].params.theta().item()*10
+        self.ax2.scatter(x=[theta], y=[beta], c='white', s=25)
+        #self.ax2.colorbar()
         
     def update(self):
         
@@ -720,10 +899,11 @@ class LinkagePlot():
                 self.points[p.name].set_offsets(
                     [[p.r[0],p.r[1]]])
             
-        self.lnE_line.set_xdata(torch.arange(0,len(self.E_list)))
-        self.lnE_line.set_ydata(torch.log10(torch.tensor(self.E_list)))
-        self.ax2.set_xlabel('Epoch')
-        self.ax2.set_xlim(0,len(self.E_list))
-        self.ax2.set_ylim(-10,10)
+        #self.lnE_line.set_xdata(torch.arange(0,len(self.E_list)))
+        #self.lnE_line.set_ydata(torch.log10(torch.tensor(self.E_list)))
+        #self.ax2.set_xlabel('Epoch')
+        #self.ax2.set_xlim(0,len(self.E_list))
+        #self.ax2.set_ylim(-10,10)
         self.time_text.set_text('')
+        self.create_energy_plot()
         self.fig.canvas.draw()
