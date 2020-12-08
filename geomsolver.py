@@ -113,11 +113,9 @@ class Point(torch.nn.Module):
 class AtPoint(Point):
     def __init__(self, linkage, name, at):
         super(AtPoint, self).__init__(linkage, name)
-        #self.params.r = Parameter(at, locked=False)
         self.params.x = Parameter(at[0], locked=False)
         self.params.y = Parameter(at[1], locked=False)
         self.params.z = Parameter(at[2], locked=False)
-        #self._params.r = ManualParameter(at, locked=False)
         self._params.x = ManualParameter(at[0], locked=False)
         self._params.y = ManualParameter(at[1], locked=False)
         self._params.z = ManualParameter(at[2], locked=False)
@@ -142,8 +140,12 @@ class AtPoint(Point):
 class AnchorPoint(Point):
     def __init__(self, linkage, name, at):
         super(AnchorPoint, self).__init__(linkage, name)
-        self.params.r = Parameter(at, locked=True)
-        self._params.r = ManualParameter(at, locked=True)
+        self.params.x = Parameter(at[0], locked=True)
+        self.params.y = Parameter(at[1], locked=True)
+        self.params.z = Parameter(at[2], locked=True)
+        self._params.x = ManualParameter(at[0], locked=True)
+        self._params.y = ManualParameter(at[1], locked=True)
+        self._params.z = ManualParameter(at[2], locked=True)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -152,9 +154,9 @@ class AnchorPoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            return(self._params.r())
+            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
         else:
-            return(self.params.r())
+            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
         
     def root(self):
         return(self)
@@ -185,8 +187,12 @@ class ToPointPoint(Point):
     def __init__(self, linkage, name, at, parent):
         super(ToPointPoint, self).__init__(linkage, name)
         self.parent = parent
-        self.params.r = Parameter(at, locked=False)
-        self._params.r = ManualParameter(at, locked=False)
+        self.params.x = Parameter(at[0], locked=False)
+        self.params.y = Parameter(at[1], locked=False)
+        self.params.z = Parameter(at[2], locked=False)
+        self._params.x = ManualParameter(at[0], locked=False)
+        self._params.y = ManualParameter(at[1], locked=False)
+        self._params.z = ManualParameter(at[2], locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -195,9 +201,9 @@ class ToPointPoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            return(self._params.r())
+            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
         else:
-            return(self.params.r())
+            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
     
     def root(self):
         return(self)
