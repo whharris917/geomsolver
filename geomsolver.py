@@ -84,6 +84,13 @@ class Point(torch.nn.Module):
         new_line = self.linkage.add_onpointline(self, L, theta, phi, ux, uz, beta)
         return(new_line)
     
+    def get_free_params(self):
+        free_params = []
+        for param in self.params.values():
+            if not param.locked:
+                free_params.append(param)
+        return(free_params)
+    
     def set_parameter(self, param_name, value):
         self.params[param_name].tensor = value
         self._params[param_name].tensor = value
@@ -106,8 +113,14 @@ class Point(torch.nn.Module):
 class AtPoint(Point):
     def __init__(self, linkage, name, at):
         super(AtPoint, self).__init__(linkage, name)
-        self.params.r = Parameter(at, locked=False)
-        self._params.r = ManualParameter(at, locked=False)
+        #self.params.r = Parameter(at, locked=False)
+        self.params.x = Parameter(at[0], locked=False)
+        self.params.y = Parameter(at[1], locked=False)
+        self.params.z = Parameter(at[2], locked=False)
+        #self._params.r = ManualParameter(at, locked=False)
+        self._params.x = ManualParameter(at[0], locked=False)
+        self._params.y = ManualParameter(at[1], locked=False)
+        self._params.z = ManualParameter(at[2], locked=False)
     
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -116,9 +129,9 @@ class AtPoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            return(self._params.r())
+            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
         else:
-            return(self.params.r())
+            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
     
     def root(self):
         return(self)
@@ -371,6 +384,13 @@ class Line(torch.nn.Module):
     def add_onlinepoint(self, alpha=None):
         new_point = self.linkage.add_onlinepoint(self, alpha)
         return(new_point)
+    
+    def get_free_params(self):
+        free_params = []
+        for param in self.params.values():
+            if not param.locked:
+                free_params.append(param)
+        return(free_params)
     
     def set_parameter(self, param_name, value):
         self.params[param_name].tensor = value
@@ -685,7 +705,9 @@ class Linkage():
         F_list = []
         for manual_param in manual_param_dict.values():
             E = self.energy(use_manual_params=True)
-            F = +1.0*torch.autograd.grad(E, manual_param.tensor, retain_graph=True, create_graph=False)[0]
+            F = torch.autograd.grad(E, manual_param.tensor,
+                retain_graph=True, create_graph=False, allow_unused=True)[0]
+            F = torch.tensor([0.0], requires_grad=False) if F is None else F
             F_list.append(F)
         F = torch.cat(F_list).tolist()
         return(F)
@@ -814,7 +836,7 @@ class LinkagePlot():
         
         # Set up figure and axis
         self.size = 5
-        self.lim = 4
+        self.lim = 2
         self.fig = plt.figure(figsize=(2*self.size,self.size))
         self.ax1 = self.fig.add_subplot(121, autoscale_on=False,
             xlim=(-self.lim,self.lim),
@@ -850,7 +872,7 @@ class LinkagePlot():
         d2 = (L**2/16)*((2-4*alpha+np.cos(THETA)+np.cos(BETA))**2 + (np.sin(THETA)+np.sin(BETA))**2)
         E = ((d2 - d_target**2)**2)**0.5
         E = E**0.5
-        self.ax2.contourf(THETA, BETA, E, levels=50)
+        self.ax2.contourf(THETA, BETA, E, levels=50, cmap='coolwarm') #gnuplot #gist_stern #coolwarm
         self.ax2.set_xlim([0,2*np.pi])
         self.ax2.set_ylim([0,2*np.pi])
         self.ax2.set_xlabel('theta (rad)')
