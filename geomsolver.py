@@ -520,13 +520,16 @@ class OnPointLine(Line):
         self.p2 = CalculatedPosteriorPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
         self.params.theta = Parameter([theta*np.pi/180/10], locked=False)
         self.params.phi = Parameter([phi/10], locked=True)
-        self.params.beta = Parameter([beta], locked=False)
+        self.params.beta = Parameter([beta], locked=True) #False
         self._params.theta = ManualParameter([theta*np.pi/180/10], locked=False)
         self._params.phi = ManualParameter([phi/10], locked=True)
-        self._params.beta = ManualParameter([beta], locked=False)
+        self._params.beta = ManualParameter([beta], locked=True) #False
         
     def is_length_constrained(self):
         return(True)
+    
+    def E(self):
+        return(0)
     
 class Linkage():
     def __init__(self, show_origin=True):       
@@ -933,5 +936,5 @@ class LinkagePlot():
         #self.ax2.set_xlim(0,len(self.E_list))
         #self.ax2.set_ylim(-10,10)
         self.time_text.set_text('')
-        self.create_energy_plot()
+        #self.create_energy_plot()
         self.fig.canvas.draw()
