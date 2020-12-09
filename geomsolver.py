@@ -2,9 +2,7 @@ import numpy as np
 from scipy import optimize
 import torch, itertools, string, time
 from munch import Munch
-from point import (
-    AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, CalculatedPoint,
-    CalculatedAnteriorPoint, CalculatedPosteriorPoint, OnLinePoint)
+from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
 from line import FromPointLine, FromPointsLine, OnPointLine
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets

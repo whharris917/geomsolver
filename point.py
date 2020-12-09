@@ -126,13 +126,8 @@ class CalculatedPoint(Point):
     def __init__(self, linkage, name, parent):
         super(CalculatedPoint, self).__init__(linkage, name)
         self.parent = parent
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.p1)))
-        
-    @property
-    def r(self):
+    
+    def get_dr(self):
         if self.parent.ux is None:
             ax = torch.tensor([1,0,0], requires_grad=False).to(torch.float)
         elif type(self.parent.ux) is list:
@@ -161,19 +156,32 @@ class CalculatedPoint(Point):
         uz = torch.cos(phi)
         dr = self.parent.L * torch.cat([ux, uy, uz])
         R = torch.stack([ax, ay, az], dim=1)
-        r = self.parent.p1.r + torch.matmul(R,dr)
-        return(r)
+        dr = torch.matmul(R,dr)
+        return(dr)
     
     def root(self):
         return(self)
     
     def E(self):
         return(0)
+    
+class CalculatedAlphaPoint(CalculatedPoint):
+    def __init__(self, linkage, name, parent):
+        super(CalculatedAlphaPoint, self).__init__(linkage, name, parent)
+        
+    def __repr__(self):
+        label = self.__class__.__name__[:-5]
+        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.p1)))
+        
+    @property
+    def r(self):
+        dr = self.get_dr()
+        r = self.parent.p1.r + dr
+        return(r)
     
 class CalculatedAnteriorPoint(Point):
     def __init__(self, linkage, name, parent):
-        super(CalculatedAnteriorPoint, self).__init__(linkage, name)
-        self.parent = parent
+        super(CalculatedAnteriorPoint, self).__init__(linkage, name, parent)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -181,51 +189,17 @@ class CalculatedAnteriorPoint(Point):
         
     @property
     def r(self):
-        if self.parent.ux is None:
-            ax = torch.tensor([1,0,0], requires_grad=False).to(torch.float)
-        elif type(self.parent.ux) is list:
-            ax = torch.tensor(ux, requires_grad=False).to(torch.float)
-        elif type(self.parent.ux).__bases__[0].__name__ is 'Line':
-            ax = self.parent.ux.u
-        else:
-            raise Exception('ux must be None, a list, or a Line.')
-        if self.parent.uz is None:
-            az = torch.tensor([0,0,1], requires_grad=False).to(torch.float)
-        elif type(self.parent.uz) is list:
-            az = torch.tensor(uz, requires_grad=False).to(torch.float)
-        elif type(self.parent.uz).__bases__[0].__name__ is 'Line':
-            az = self.parent.uz.u
-        else:
-            raise Exception('uz must be None, a list, or a Line.')
-        ay = torch.cross(az, ax)
-        if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*10
-            phi = self.parent._params.phi()*10         
-        else:
-            theta = self.parent.params.theta()*10
-            phi = self.parent.params.phi()*10
-        ux = torch.sin(phi)*torch.cos(theta)
-        uy = torch.sin(phi)*torch.sin(theta)
-        uz = torch.cos(phi)
-        dr = self.parent.L * torch.cat([ux, uy, uz])
-        R = torch.stack([ax, ay, az], dim=1)
+        dr = self.get_dr()
         if self.linkage.use_manual_params:
             beta = self.parent._params.beta()
         else:
             beta = self.parent.params.beta()
-        r = self.parent.parent.r - beta * torch.matmul(R,dr)
+        r = self.parent.parent.r - beta * dr
         return(r)
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
     
 class CalculatedPosteriorPoint(Point):
     def __init__(self, linkage, name, parent):
-        super(CalculatedPosteriorPoint, self).__init__(linkage, name)
-        self.parent = parent
+        super(CalculatedPosteriorPoint, self).__init__(linkage, name, parent)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -233,46 +207,13 @@ class CalculatedPosteriorPoint(Point):
         
     @property
     def r(self):
-        if self.parent.ux is None:
-            ax = torch.tensor([1,0,0], requires_grad=False).to(torch.float)
-        elif type(self.parent.ux) is list:
-            ax = torch.tensor(ux, requires_grad=False).to(torch.float)
-        elif type(self.parent.ux).__bases__[0].__name__ is 'Line':
-            ax = self.parent.ux.u
-        else:
-            raise Exception('ux must be None, a list, or a Line.')
-        if self.parent.uz is None:
-            az = torch.tensor([0,0,1], requires_grad=False).to(torch.float)
-        elif type(self.parent.uz) is list:
-            az = torch.tensor(uz, requires_grad=False).to(torch.float)
-        elif type(self.parent.uz).__bases__[0].__name__ is 'Line':
-            az = self.parent.uz.u
-        else:
-            raise Exception('uz must be None, a list, or a Line.')
-        ay = torch.cross(az, ax)
-        if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*10
-            phi = self.parent._params.phi()*10 
-        else:
-            theta = self.parent.params.theta()*10
-            phi = self.parent.params.phi()*10
-        ux = torch.sin(phi)*torch.cos(theta)
-        uy = torch.sin(phi)*torch.sin(theta)
-        uz = torch.cos(phi)
-        dr = self.parent.L * torch.cat([ux, uy, uz])
-        R = torch.stack([ax, ay, az], dim=1)
+        dr = self.get_dr()
         if self.linkage.use_manual_params:
             beta = self.parent._params.beta()
         else:
             beta = self.parent.params.beta()
-        r = self.parent.parent.r + (1-beta) * torch.matmul(R,dr)
+        r = self.parent.parent.r + (1-beta) * dr
         return(r)
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
 
 class OnLinePoint(Point):
     def __init__(self, linkage, name, parent, alpha):

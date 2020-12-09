@@ -3,8 +3,8 @@ import numpy as np
 from base import BaseGeometry
 from param import Parameter, ManualParameter
 from point import (
-    Point, AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, CalculatedPoint,
-    CalculatedAnteriorPoint, CalculatedPosteriorPoint, OnLinePoint)
+    Point, AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint,
+    CalculatedAlphaPoint, CalculatedAnteriorPoint, CalculatedPosteriorPoint)
 
 class Line(BaseGeometry):
     def __init__(self, linkage, name):
@@ -34,7 +34,7 @@ class FromPointLine(Line):
         self.ux = ux
         self.uz = uz
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
-        self.p2 = CalculatedPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
+        self.p2 = CalculatedAlphaPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
         self.params.theta = Parameter([theta*np.pi/180/10], locked=self.locked)
         self.params.phi = Parameter([phi/10], locked=True)
         self._params.theta = ManualParameter([theta*np.pi/180/10], locked=self.locked)
