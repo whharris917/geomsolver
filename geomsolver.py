@@ -1,535 +1,17 @@
 import numpy as np
 from scipy import optimize
-import pandas as pd
-import torch, IPython, itertools, string
-import random, time, warnings, copy
-import matplotlib.pyplot as plt
-from matplotlib import animation
+import torch, itertools, string, time
 from munch import Munch
+from point import (
+    AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, CalculatedPoint,
+    CalculatedAnteriorPoint, CalculatedPosteriorPoint, OnLinePoint)
+from line import FromPointLine, FromPointsLine, OnPointLine
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
+import matplotlib.pyplot as plt
 
-class BaseParameter(torch.nn.Module):
-    def __init__(self, tensor, locked=False):
-        super(BaseParameter, self).__init__()
-        self.locked = locked
-        self._tensor = None
-        self.tensor = tensor
-        
-    def __call__(self):
-        return(self.tensor)
-    
-    def __repr__(self):
-        return('{}({}, locked={})'.format(self.__class__.__name__, str(self.tensor), self.locked))
-    
-    @property
-    def tensor(self):
-        return(self._tensor)
-    
-    @tensor.setter
-    def tensor(self, _tensor):
-        if type(_tensor) is not list:
-            _tensor = [_tensor]
-        if self.locked:
-            self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float)
-        else:
-            self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float)) 
-        
-    def lock(self):
-        self.locked = True
-        value = copy.deepcopy(self._tensor.tolist())
-        del(self._tensor)
-        self.tensor = value
-    
-    def unlock(self):
-        self.locked = False
-        value = copy.deepcopy(self._tensor.tolist())
-        del(self._tensor)
-        self.tensor = value
-        
-class Parameter(BaseParameter):
-    def __init__(self, tensor, locked=False):
-        super(Parameter, self).__init__(tensor, locked)
-        
-class ManualParameter(BaseParameter):
-    def __init__(self, tensor, locked=False):
-        super(ManualParameter, self).__init__(tensor, locked)
-    
-class Point(torch.nn.Module):
-    def __init__(self, linkage, name):
-        super(Point, self).__init__()
-        self.linkage = linkage
-        self.name = name
-        self.params = Munch({})
-        self._params = Munch({})
-        
-    def __repr__(self):
-        raise Exception('Override this method.')
-    
-    @property
-    def r(self):
-        raise Exception('Override this property.')
-
-    def root(self):
-        raise Exception('Override this method.')
-    
-    def E(self):
-        raise Exception('Override this method.')
-        
-    def add_frompointline(self, L, theta, phi=None, ux=None, uz=None, locked=False):
-        new_line = self.linkage.add_frompointline(self, L, theta, phi, ux, uz, locked)
-        return(new_line)
-    
-    def add_onpointline(self, L, theta, phi=None, ux=None, uz=None, beta=None):
-        new_line = self.linkage.add_onpointline(self, L, theta, phi, ux, uz, beta)
-        return(new_line)
-    
-    def get_free_params(self):
-        free_params = []
-        for param in self.params.values():
-            if not param.locked:
-                free_params.append(param)
-        return(free_params)
-    
-    def set_parameter(self, param_name, value):
-        self.params[param_name].tensor = value
-        self._params[param_name].tensor = value
-        self.linkage.plot.update()
-        try:
-            self.linkage.update()
-        except:
-            pass
-        
-    def lock(self):
-        for param_name in self.params.keys():
-            self.params[param_name].lock()
-            self._params[param_name].lock()
-            
-    def unlock(self):
-        for param_name in self.params.keys():
-            self.params[param_name].unlock()
-            self._params[param_name].unlock()
-    
-class AtPoint(Point):
-    def __init__(self, linkage, name, at):
-        super(AtPoint, self).__init__(linkage, name)
-        self.params.x = Parameter(at[0], locked=False)
-        self.params.y = Parameter(at[1], locked=False)
-        self.params.z = Parameter(at[2], locked=False)
-        self._params.x = ManualParameter(at[0], locked=False)
-        self._params.y = ManualParameter(at[1], locked=False)
-        self._params.z = ManualParameter(at[2], locked=False)
-    
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(at={})'.format(label, self.name, str(self.r.tolist())))
-    
-    @property
-    def r(self):
-        if self.linkage.use_manual_params:
-            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
-        else:
-            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
-    
-class AnchorPoint(Point):
-    def __init__(self, linkage, name, at):
-        super(AnchorPoint, self).__init__(linkage, name)
-        self.params.x = Parameter(at[0], locked=True)
-        self.params.y = Parameter(at[1], locked=True)
-        self.params.z = Parameter(at[2], locked=True)
-        self._params.x = ManualParameter(at[0], locked=True)
-        self._params.y = ManualParameter(at[1], locked=True)
-        self._params.z = ManualParameter(at[2], locked=True)
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(at={})'.format(label, self.name, str(self.r.tolist())))
-        
-    @property
-    def r(self):
-        if self.linkage.use_manual_params:
-            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
-        else:
-            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
-        
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
-    
-class OnPointPoint(Point):
-    def __init__(self, linkage, name, parent):
-        super(OnPointPoint, self).__init__(linkage, name)
-        self.parent = parent
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(on={})'.format(label, self.name, str(self.parent)))
-        
-    @property
-    def r(self):
-        return(self.parent.r)
-    
-    def root(self):
-        return(self.parent.root())
-    
-    def E(self):
-        return(0)
-    
-class ToPointPoint(Point):
-    def __init__(self, linkage, name, at, parent):
-        super(ToPointPoint, self).__init__(linkage, name)
-        self.parent = parent
-        self.params.x = Parameter(at[0], locked=False)
-        self.params.y = Parameter(at[1], locked=False)
-        self.params.z = Parameter(at[2], locked=False)
-        self._params.x = ManualParameter(at[0], locked=False)
-        self._params.y = ManualParameter(at[1], locked=False)
-        self._params.z = ManualParameter(at[2], locked=False)
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(to={})'.format(label, self.name, str(self.parent)))
-        
-    @property
-    def r(self):
-        if self.linkage.use_manual_params:
-            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
-        else:
-            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return((self.r-self.parent.r).pow(2).sum())
-    
-class CalculatedPoint(Point):
-    def __init__(self, linkage, name, parent):
-        super(CalculatedPoint, self).__init__(linkage, name)
-        self.parent = parent
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.p1)))
-        
-    @property
-    def r(self):
-        if self.parent.ux is None:
-            ax = torch.tensor([1,0,0], requires_grad=False).to(torch.float)
-        elif type(self.parent.ux) is list:
-            ax = torch.tensor(ux, requires_grad=False).to(torch.float)
-        elif type(self.parent.ux).__bases__[0].__name__ is 'Line':
-            ax = self.parent.ux.u
-        else:
-            raise Exception('ux must be None, a list, or a Line.')
-        if self.parent.uz is None:
-            az = torch.tensor([0,0,1], requires_grad=False).to(torch.float)
-        elif type(self.parent.uz) is list:
-            az = torch.tensor(uz, requires_grad=False).to(torch.float)
-        elif type(self.parent.uz).__bases__[0].__name__ is 'Line':
-            az = self.parent.uz.u
-        else:
-            raise Exception('uz must be None, a list, or a Line.')
-        ay = torch.cross(az, ax)
-        if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*10
-            phi = self.parent._params.phi()*10            
-        else:
-            theta = self.parent.params.theta()*10
-            phi = self.parent.params.phi()*10
-        ux = torch.sin(phi)*torch.cos(theta)
-        uy = torch.sin(phi)*torch.sin(theta)
-        uz = torch.cos(phi)
-        dr = self.parent.L * torch.cat([ux, uy, uz])
-        R = torch.stack([ax, ay, az], dim=1)
-        r = self.parent.p1.r + torch.matmul(R,dr)
-        return(r)
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
-    
-class CalculatedAnteriorPoint(Point):
-    def __init__(self, linkage, name, parent):
-        super(CalculatedAnteriorPoint, self).__init__(linkage, name)
-        self.parent = parent
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
-        
-    @property
-    def r(self):
-        if self.parent.ux is None:
-            ax = torch.tensor([1,0,0], requires_grad=False).to(torch.float)
-        elif type(self.parent.ux) is list:
-            ax = torch.tensor(ux, requires_grad=False).to(torch.float)
-        elif type(self.parent.ux).__bases__[0].__name__ is 'Line':
-            ax = self.parent.ux.u
-        else:
-            raise Exception('ux must be None, a list, or a Line.')
-        if self.parent.uz is None:
-            az = torch.tensor([0,0,1], requires_grad=False).to(torch.float)
-        elif type(self.parent.uz) is list:
-            az = torch.tensor(uz, requires_grad=False).to(torch.float)
-        elif type(self.parent.uz).__bases__[0].__name__ is 'Line':
-            az = self.parent.uz.u
-        else:
-            raise Exception('uz must be None, a list, or a Line.')
-        ay = torch.cross(az, ax)
-        if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*10
-            phi = self.parent._params.phi()*10         
-        else:
-            theta = self.parent.params.theta()*10
-            phi = self.parent.params.phi()*10
-        ux = torch.sin(phi)*torch.cos(theta)
-        uy = torch.sin(phi)*torch.sin(theta)
-        uz = torch.cos(phi)
-        dr = self.parent.L * torch.cat([ux, uy, uz])
-        R = torch.stack([ax, ay, az], dim=1)
-        if self.linkage.use_manual_params:
-            beta = self.parent._params.beta()
-        else:
-            beta = self.parent.params.beta()
-        r = self.parent.parent.r - beta * torch.matmul(R,dr)
-        return(r)
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
-    
-class CalculatedPosteriorPoint(Point):
-    def __init__(self, linkage, name, parent):
-        super(CalculatedPosteriorPoint, self).__init__(linkage, name)
-        self.parent = parent
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
-        
-    @property
-    def r(self):
-        if self.parent.ux is None:
-            ax = torch.tensor([1,0,0], requires_grad=False).to(torch.float)
-        elif type(self.parent.ux) is list:
-            ax = torch.tensor(ux, requires_grad=False).to(torch.float)
-        elif type(self.parent.ux).__bases__[0].__name__ is 'Line':
-            ax = self.parent.ux.u
-        else:
-            raise Exception('ux must be None, a list, or a Line.')
-        if self.parent.uz is None:
-            az = torch.tensor([0,0,1], requires_grad=False).to(torch.float)
-        elif type(self.parent.uz) is list:
-            az = torch.tensor(uz, requires_grad=False).to(torch.float)
-        elif type(self.parent.uz).__bases__[0].__name__ is 'Line':
-            az = self.parent.uz.u
-        else:
-            raise Exception('uz must be None, a list, or a Line.')
-        ay = torch.cross(az, ax)
-        if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*10
-            phi = self.parent._params.phi()*10 
-        else:
-            theta = self.parent.params.theta()*10
-            phi = self.parent.params.phi()*10
-        ux = torch.sin(phi)*torch.cos(theta)
-        uy = torch.sin(phi)*torch.sin(theta)
-        uz = torch.cos(phi)
-        dr = self.parent.L * torch.cat([ux, uy, uz])
-        R = torch.stack([ax, ay, az], dim=1)
-        if self.linkage.use_manual_params:
-            beta = self.parent._params.beta()
-        else:
-            beta = self.parent.params.beta()
-        r = self.parent.parent.r + (1-beta) * torch.matmul(R,dr)
-        return(r)
-    
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
-    
-class Line(torch.nn.Module):
-    def __init__(self, linkage, name):
-        super(Line, self).__init__()
-        self.linkage = linkage
-        self.name = name
-        self.parent = None
-        self.p1 = None
-        self.p2 = None
-        self.params = Munch({})
-        self._params = Munch({})
-        
-    def __repr__(self):
-        raise Exception('Override this method.')
-        
-    @property
-    def r(self):
-        return(self.p2.r-self.p1.r)
-    
-    def E(self):
-        raise Exception('Override this method.')
-    
-    def is_constrained(self):
-        raise Exception('Override this method.')
-        
-    def add_onlinepoint(self, alpha=None):
-        new_point = self.linkage.add_onlinepoint(self, alpha)
-        return(new_point)
-    
-    def get_free_params(self):
-        free_params = []
-        for param in self.params.values():
-            if not param.locked:
-                free_params.append(param)
-        return(free_params)
-    
-    def set_parameter(self, param_name, value):
-        self.params[param_name].tensor = value
-        self._params[param_name].tensor = value
-        self.linkage.plot.update()
-        try:
-            self.linkage.update()
-        except:
-            pass
-        
-    def lock(self):
-        for param_name in self.params.keys():
-            self.params[param_name].lock()
-            self._params[param_name].lock()
-            
-    def unlock(self):
-        for param_name in self.params.keys():
-            self.params[param_name].unlock()
-            self._params[param_name].unlock()
-    
-class FromPointLine(Line):
-    def __init__(self, linkage, name, parent, L, theta, phi=None, ux=None, uz=None, locked=False):
-        super(FromPointLine, self).__init__(linkage, name)
-        self.parent = parent
-        self.locked = locked
-        self.L = L
-        phi = np.pi/2 if phi is None else phi*np.pi/180
-        self.ux = ux
-        self.uz = uz
-        self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
-        self.p2 = CalculatedPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.theta = Parameter([theta*np.pi/180/10], locked=self.locked)
-        self.params.phi = Parameter([phi/10], locked=True)
-        self._params.theta = ManualParameter([theta*np.pi/180/10], locked=self.locked)
-        self._params.phi = ManualParameter([phi/10], locked=True)
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-4]
-        return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
-    
-    @property
-    def u(self):
-        return(self.r/self.L)
-    
-    def E(self):
-        return(0)
-    
-    def is_length_constrained(self):
-        return(True)
-    
-class FromPointsLine(Line):
-    def __init__(self, linkage, name, parent1, parent2):
-        super(FromPointsLine, self).__init__(linkage, name)
-        self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent1)
-        self.p2 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=parent2)
-        self.target_length = None
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-4]
-        return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
-    
-    def E(self):
-        if self.is_length_constrained() and self.target_length is not None:
-            #E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
-            E = (self.p2.r-self.p1.r).pow(2).sum()-torch.tensor(self.target_length).pow(2)
-            E = (torch.abs(E)).pow(0.5)
-            return(E)
-        return(0)
-    
-    def is_length_constrained(self):
-        if self.target_length is not None:
-            return(True)
-        elif self.p1.root().__class__.__name__ is 'AnchorPoint':
-            if self.p2.root().__class__.__name__ is 'AnchorPoint':
-                return(True)
-        return(False)
-    
-    def constrain_length(self, L):
-        if self.p1.root().__class__.__name__ is 'AnchorPoint':
-            if self.p2.root().__class__.__name__ is 'AnchorPoint':
-                raise Exception('Cannot constrain the length of a line with anchored endpoints.')
-        self.target_length = L
-        self.linkage.update()
-    
-class OnLinePoint(Point):
-    def __init__(self, linkage, name, parent, alpha):
-        super(OnLinePoint, self).__init__(linkage, name)
-        self.parent = parent
-        alpha = 0.5 if alpha is None else alpha
-        self.params.alpha = Parameter([alpha], locked=False)
-        self._params.alpha = ManualParameter([alpha], locked=False)
-        
-    def __repr__(self):
-        label = self.__class__.__name__[:-5]
-        return('[{}]Point_{}(on={})'.format(label, self.name, str(self.parent)))
-    
-    @property
-    def r(self):
-        if self.linkage.use_manual_params:
-            alpha = self._params.alpha()
-        else:
-            alpha = self.params.alpha()
-        return((1-alpha)*self.parent.p1.r+alpha*self.parent.p2.r)
-
-    def root(self):
-        return(self)
-    
-    def E(self):
-        return(0)
-    
-class OnPointLine(Line):
-    def __init__(self, linkage, name, parent, L, theta, phi=None, ux=None, uz=None, beta=None):
-        super(OnPointLine, self).__init__(linkage, name)
-        self.parent = parent
-        self.L = L
-        phi = np.pi/2 if phi is None else phi*np.pi/180
-        self.ux = ux
-        self.uz = uz
-        beta = 0.5 if beta is None else beta
-        self.p1 = CalculatedAnteriorPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
-        self.p2 = CalculatedPosteriorPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.theta = Parameter([theta*np.pi/180/10], locked=False)
-        self.params.phi = Parameter([phi/10], locked=True)
-        self.params.beta = Parameter([beta], locked=True) #False
-        self._params.theta = ManualParameter([theta*np.pi/180/10], locked=False)
-        self._params.phi = ManualParameter([phi/10], locked=True)
-        self._params.beta = ManualParameter([beta], locked=True) #False
-        
-    def is_length_constrained(self):
-        return(True)
-    
-    def E(self):
-        return(0)
+FIGLIM = 3
+XTOL = 1.0e-05
     
 class Linkage():
     def __init__(self, show_origin=True):       
@@ -732,9 +214,9 @@ class Linkage():
         J[0] += F
         return(J)
         
-    '''
+    #'''
     def update(self, max_num_epochs=10000):
-        optimizer = torch.optim.SGD(self.get_param_dict().values(), lr=0.001)
+        optimizer = torch.optim.SGD(self.get_param_dict().values(), lr=0.0001)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
             E = self.energy(use_manual_params=False)
@@ -743,17 +225,21 @@ class Linkage():
             self.plot.E_list.append(E.item())
             if E <= self.tolerance:
                 break
+            if epoch % 100 == 0:
+                self.plot.update()
+                time.sleep(0.01)
         if False:
             if (E > self.tolerance or E.isnan()):
                 raise Exception('Could not solve all constraints.')
         self.plot.update()
         time.sleep(0.01)
+    #'''
+     
     '''
-        
     def update(self):
         x0 = self.get_manual_param_list()
         solver = optimize.root(self._error_vec, x0=x0, jac=self._error_vec_jacobian, method='hybr',
-                               options={'maxfev': 1000, 'factor': 0.1, 'xtol': 1.0e-04}) 
+                               options={'maxfev': 1000, 'factor': 0.1, 'xtol': XTOL}) 
         xf = solver.x
         self.apply_manual_params()
         if not solver.success:
@@ -761,7 +247,8 @@ class Linkage():
         self.plot.E_list.append(0)
         self.plot.update()
         time.sleep(0.01)
-        
+    '''
+       
     def create_controller(self, manual=False):
         
         linkage = self
@@ -845,7 +332,7 @@ class LinkagePlot():
         
         # Set up figure and axis
         self.size = 5
-        self.lim = 2
+        self.lim = FIGLIM
         self.fig = plt.figure(figsize=(2*self.size,self.size))
         self.ax1 = self.fig.add_subplot(121, autoscale_on=False,
             xlim=(-self.lim,self.lim),
