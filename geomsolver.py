@@ -3,12 +3,12 @@ from scipy import optimize
 import torch, itertools, string, time
 from munch import Munch
 from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
-from line import FromPointLine, FromPointsLine, OnPointLine
+from line import FromPointLine, FromPointsLine, OnPointLine, OnPointsLine
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
 
-FIGLIM = 3
+FIGLIM = 4
 XTOL = 1.0e-05
     
 class Linkage():
@@ -80,6 +80,12 @@ class Linkage():
         self.lines[name] = OnPointLine(self, name, parent, L, theta, phi, ux, uz, beta)
         self.plot.update()
         return(self.lines[name])
+        
+    def add_onpointsline(self, parent1, parent2, L, gamma=None):
+        name = next(self.names['line'])
+        self.lines[name] = OnPointsLine(self, name, parent1, parent2, L, gamma)
+        self.plot.update()
+        return(self.lines[name]) 
         
     @property
     def N(self):

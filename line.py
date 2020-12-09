@@ -4,7 +4,8 @@ from base import BaseGeometry
 from param import Parameter, ManualParameter
 from point import (
     Point, AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint,
-    CalculatedAlphaPoint, CalculatedAnteriorPoint, CalculatedPosteriorPoint)
+    CalculatedAlphaPoint, CalculatedAnteriorPoint, CalculatedPosteriorPoint,
+    CalculatedAnteriorGammaPoint, CalculatedPosteriorGammaPoint)
 
 class Line(BaseGeometry):
     def __init__(self, linkage, name):
@@ -17,9 +18,19 @@ class Line(BaseGeometry):
     def r(self):
         return(self.p2.r-self.p1.r)
     
+    def get_length(self):
+        try:
+            return(self.L)
+        except:
+            return(self.r.pow(2).sum().pow(0.5))
+    
+    @property
+    def u(self):
+        return(self.r/self.get_length())
+    
     def is_constrained(self):
         raise Exception('Override this method.')
-        
+    
     def add_onlinepoint(self, alpha=None):
         new_point = self.linkage.add_onlinepoint(self, alpha)
         return(new_point)
@@ -44,10 +55,6 @@ class FromPointLine(Line):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
-    @property
-    def u(self):
-        return(self.r/self.L)
-    
     def E(self):
         return(0)
     
@@ -65,6 +72,13 @@ class FromPointsLine(Line):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
+    def constrain_length(self, L):
+        if self.p1.root().__class__.__name__ is 'AnchorPoint':
+            if self.p2.root().__class__.__name__ is 'AnchorPoint':
+                raise Exception('Cannot constrain the length of a line with anchored endpoints.')
+        self.target_length = L
+        self.linkage.update()
+        
     def E(self):
         if self.is_length_constrained() and self.target_length is not None:
             #E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
@@ -80,13 +94,6 @@ class FromPointsLine(Line):
             if self.p2.root().__class__.__name__ is 'AnchorPoint':
                 return(True)
         return(False)
-    
-    def constrain_length(self, L):
-        if self.p1.root().__class__.__name__ is 'AnchorPoint':
-            if self.p2.root().__class__.__name__ is 'AnchorPoint':
-                raise Exception('Cannot constrain the length of a line with anchored endpoints.')
-        self.target_length = L
-        self.linkage.update()
         
 class OnPointLine(Line):
     def __init__(self, linkage, name, parent, L, theta, phi=None, ux=None, uz=None, beta=None):
@@ -105,13 +112,33 @@ class OnPointLine(Line):
         self._params.theta = ManualParameter([theta*np.pi/180/10], locked=False)
         self._params.phi = ManualParameter([phi/10], locked=True)
         self._params.beta = ManualParameter([beta], locked=False)
-        
-    def is_length_constrained(self):
-        return(True)
     
-    @property
-    def u(self):
-        return(self.r/self.L)
+    def __repr__(self):
+        return('Debug this.')
     
     def E(self):
         return(0)
+    
+    def is_length_constrained(self):
+        return(True)
+    
+class OnPointsLine(Line):
+    def __init__(self, linkage, name, parent1, parent2, L, gamma=None):
+        super(OnPointsLine, self).__init__(linkage, name)
+        self.parent1 = parent1
+        self.parent2 = parent2
+        self.L = L
+        gamma = 0.5 if gamma is None else gamma
+        self.p1 = CalculatedAnteriorGammaPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
+        self.p2 = CalculatedPosteriorGammaPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
+        self.params.gamma = Parameter([gamma], locked=False)
+        self._params.gamma = ManualParameter([gamma], locked=False)
+    
+    def __repr__(self):
+        return('Debug this.')
+    
+    def E(self):
+        return(0)
+    
+    def is_length_constrained(self):
+        return(True)

@@ -179,7 +179,7 @@ class CalculatedAlphaPoint(CalculatedPoint):
         r = self.parent.p1.r + dr
         return(r)
     
-class CalculatedAnteriorPoint(Point):
+class CalculatedAnteriorPoint(CalculatedPoint):
     def __init__(self, linkage, name, parent):
         super(CalculatedAnteriorPoint, self).__init__(linkage, name, parent)
         
@@ -197,7 +197,29 @@ class CalculatedAnteriorPoint(Point):
         r = self.parent.parent.r - beta * dr
         return(r)
     
-class CalculatedPosteriorPoint(Point):
+class CalculatedAnteriorGammaPoint(CalculatedPoint):
+    def __init__(self, linkage, name, parent):
+        super(CalculatedAnteriorGammaPoint, self).__init__(linkage, name, parent)
+        
+    def __repr__(self):
+        label = self.__class__.__name__[:-5]
+        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
+        
+    @property
+    def r(self):
+        #print('calculating r of calculated anterior gamma point')
+        #import IPython; IPython.embed()        
+        if self.linkage.use_manual_params:
+            gamma = self.parent._params.gamma()
+        else:
+            gamma = self.parent.params.gamma()
+        dr = self.parent.parent2.r - self.parent.parent1.r
+        u = dr/(dr.pow(2).sum().pow(0.5))
+        R = self.parent.L*u
+        r = self.parent.parent1.r - gamma*(R-dr)
+        return(r)
+    
+class CalculatedPosteriorPoint(CalculatedPoint):
     def __init__(self, linkage, name, parent):
         super(CalculatedPosteriorPoint, self).__init__(linkage, name, parent)
         
@@ -215,6 +237,38 @@ class CalculatedPosteriorPoint(Point):
         r = self.parent.parent.r + (1-beta) * dr
         return(r)
 
+class CalculatedPosteriorGammaPoint(CalculatedPoint):
+    def __init__(self, linkage, name, parent):
+        super(CalculatedPosteriorGammaPoint, self).__init__(linkage, name, parent)
+        
+    def __repr__(self):
+        label = self.__class__.__name__[:-5]
+        return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
+        
+    @property
+    def r(self):
+        dr = self.get_dr()
+        if self.linkage.use_manual_params:
+            beta = self.parent._params.beta()
+        else:
+            beta = self.parent.params.beta()
+        r = self.parent.parent.r + (1-beta) * dr
+        return(r)
+    
+    @property
+    def r(self):
+        #print('calculating r of calculated posterior gamma point')
+        #import IPython; IPython.embed()        
+        if self.linkage.use_manual_params:
+            gamma = self.parent._params.gamma()
+        else:
+            gamma = self.parent.params.gamma()
+        dr = self.parent.parent2.r - self.parent.parent1.r
+        u = dr/(dr.pow(2).sum().pow(0.5))
+        R = self.parent.L*u
+        r = self.parent.parent2.r + (1-gamma)*(R-dr)
+        return(r)
+    
 class OnLinePoint(Point):
     def __init__(self, linkage, name, parent, alpha):
         super(OnLinePoint, self).__init__(linkage, name)
