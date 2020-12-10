@@ -6,6 +6,7 @@ from point import (
     Point, AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint,
     CalculatedAlphaPoint, CalculatedAnteriorPoint, CalculatedPosteriorPoint,
     CalculatedAnteriorGammaPoint, CalculatedPosteriorGammaPoint)
+from settings import *
 
 class Line(BaseGeometry):
     def __init__(self, linkage, name):
@@ -46,10 +47,10 @@ class FromPointLine(Line):
         self.uz = uz
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
         self.p2 = CalculatedAlphaPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.theta = Parameter([theta*np.pi/180/10], locked=self.locked)
-        self.params.phi = Parameter([phi/10], locked=True)
-        self._params.theta = ManualParameter([theta*np.pi/180/10], locked=self.locked)
-        self._params.phi = ManualParameter([phi/10], locked=True)
+        self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR], locked=self.locked)
+        self.params.phi = Parameter([phi/ANGLE_FACTOR], locked=True)
+        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR], locked=self.locked)
+        self._params.phi = ManualParameter([phi/ANGLE_FACTOR], locked=True)
         
     def __repr__(self):
         label = self.__class__.__name__[:-4]
@@ -106,11 +107,11 @@ class OnPointLine(Line):
         beta = 0.5 if beta is None else beta
         self.p1 = CalculatedAnteriorPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
         self.p2 = CalculatedPosteriorPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.theta = Parameter([theta*np.pi/180/10], locked=False)
-        self.params.phi = Parameter([phi/10], locked=True)
+        self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR], locked=False)
+        self.params.phi = Parameter([phi/ANGLE_FACTOR], locked=True)
         self.params.beta = Parameter([beta], locked=False)
-        self._params.theta = ManualParameter([theta*np.pi/180/10], locked=False)
-        self._params.phi = ManualParameter([phi/10], locked=True)
+        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR], locked=False)
+        self._params.phi = ManualParameter([phi/ANGLE_FACTOR], locked=True)
         self._params.beta = ManualParameter([beta], locked=False)
     
     def __repr__(self):

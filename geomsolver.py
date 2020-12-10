@@ -7,10 +7,9 @@ from line import FromPointLine, FromPointsLine, OnPointLine, OnPointsLine
 from ipywidgets import interact, interactive, fixed, interact_manual
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
+from settings import *
+from param import Parameter
 
-FIGLIM = 4
-XTOL = 1.0e-05
-    
 class Linkage():
     def __init__(self, show_origin=True):       
         self.points = Munch(torch.nn.ModuleDict({}))
@@ -26,7 +25,7 @@ class Linkage():
                     self.names[_type].append(''.join(t))
             self.names[_type] = iter(self.names[_type][1:])
         self.plot = LinkagePlot(self, show_origin)
-        self.tolerance = 0.0001
+        self.tolerance = TOLERANCE
         self.use_manual_params = False
     
     ######################################## Points ########################################
@@ -194,8 +193,6 @@ class Linkage():
         return(E)
         
     def _forces(self):
-        #E = self.energy(use_manual_params=True)
-        #dof_tensor = self.get_dof_tensor()
         manual_param_dict = self.get_manual_param_dict()
         F_list = []
         for manual_param in manual_param_dict.values():
@@ -218,9 +215,9 @@ class Linkage():
         J[0] += F
         return(J)
         
-    #'''
+    '''
     def update(self, max_num_epochs=10000):
-        optimizer = torch.optim.SGD(self.get_param_dict().values(), lr=0.0001)
+        optimizer = torch.optim.SGD(self.get_param_dict().values(), lr=LR)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
             E = self.energy(use_manual_params=False)
@@ -229,7 +226,7 @@ class Linkage():
             self.plot.E_list.append(E.item())
             if E <= self.tolerance:
                 break
-            if epoch % 100 == 0:
+            if epoch % N_UPDATE == 0:
                 self.plot.update()
                 time.sleep(0.01)
         if False:
@@ -237,13 +234,14 @@ class Linkage():
                 raise Exception('Could not solve all constraints.')
         self.plot.update()
         time.sleep(0.01)
-    #'''
-     
     '''
+     
+    #'''
     def update(self):
         x0 = self.get_manual_param_list()
-        solver = optimize.root(self._error_vec, x0=x0, jac=self._error_vec_jacobian, method='hybr',
-                               options={'maxfev': 1000, 'factor': 0.1, 'xtol': XTOL}) 
+        solver = optimize.root(
+            self._error_vec, x0=x0, jac=self._error_vec_jacobian, method='hybr',
+            options={'maxfev': 1000, 'factor': 0.1, 'xtol': XTOL}) 
         xf = solver.x
         self.apply_manual_params()
         if not solver.success:
@@ -251,7 +249,7 @@ class Linkage():
         self.plot.E_list.append(0)
         self.plot.update()
         time.sleep(0.01)
-    '''
+    #'''
        
     def create_controller(self, manual=False):
         
@@ -334,7 +332,6 @@ class LinkagePlot():
         self.origin = torch.tensor([0,0,0])
         self.E_list = [1.0]
         
-        # Set up figure and axis
         self.size = 5
         self.lim = FIGLIM
         self.fig = plt.figure(figsize=(2*self.size,self.size))

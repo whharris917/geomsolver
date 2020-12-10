@@ -1,6 +1,7 @@
 import torch
 from base import BaseGeometry
 from param import Parameter, ManualParameter
+from settings import *
 
 class Point(BaseGeometry):
     def __init__(self, linkage, name):
@@ -146,11 +147,11 @@ class CalculatedPoint(Point):
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
         if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*10
-            phi = self.parent._params.phi()*10            
+            theta = self.parent._params.theta()*ANGLE_FACTOR
+            phi = self.parent._params.phi()*ANGLE_FACTOR         
         else:
-            theta = self.parent.params.theta()*10
-            phi = self.parent.params.phi()*10
+            theta = self.parent.params.theta()*ANGLE_FACTOR
+            phi = self.parent.params.phi()*ANGLE_FACTOR
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi)
@@ -206,9 +207,7 @@ class CalculatedAnteriorGammaPoint(CalculatedPoint):
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
         
     @property
-    def r(self):
-        #print('calculating r of calculated anterior gamma point')
-        #import IPython; IPython.embed()        
+    def r(self):   
         if self.linkage.use_manual_params:
             gamma = self.parent._params.gamma()
         else:
@@ -256,9 +255,7 @@ class CalculatedPosteriorGammaPoint(CalculatedPoint):
         return(r)
     
     @property
-    def r(self):
-        #print('calculating r of calculated posterior gamma point')
-        #import IPython; IPython.embed()        
+    def r(self):   
         if self.linkage.use_manual_params:
             gamma = self.parent._params.gamma()
         else:
