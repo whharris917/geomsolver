@@ -6,6 +6,10 @@ from settings import *
 class Point(BaseGeometry):
     def __init__(self, linkage, name):
         super(Point, self).__init__(linkage, name)
+
+    @property
+    def type(self):
+        return('point')
     
     @property
     def r(self):
@@ -25,12 +29,12 @@ class Point(BaseGeometry):
 class AtPoint(Point):
     def __init__(self, linkage, name, at):
         super(AtPoint, self).__init__(linkage, name)
-        self.params.x = Parameter(at[0], locked=False)
-        self.params.y = Parameter(at[1], locked=False)
-        self.params.z = Parameter(at[2], locked=False)
-        self._params.x = ManualParameter(at[0], locked=False)
-        self._params.y = ManualParameter(at[1], locked=False)
-        self._params.z = ManualParameter(at[2], locked=False)
+        self.params.x = Parameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
+        self.params.y = Parameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
+        self.params.z = Parameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
+        self._params.x = ManualParameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
+        self._params.y = ManualParameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
+        self._params.z = ManualParameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
     
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -52,12 +56,12 @@ class AtPoint(Point):
 class AnchorPoint(Point):
     def __init__(self, linkage, name, at):
         super(AnchorPoint, self).__init__(linkage, name)
-        self.params.x = Parameter(at[0], locked=True)
-        self.params.y = Parameter(at[1], locked=True)
-        self.params.z = Parameter(at[2], locked=True)
-        self._params.x = ManualParameter(at[0], locked=True)
-        self._params.y = ManualParameter(at[1], locked=True)
-        self._params.z = ManualParameter(at[2], locked=True)
+        self.params.x = Parameter(at[0], self, 'x', range=[-10,10], units='m', locked=True)
+        self.params.y = Parameter(at[1], self, 'y', range=[-10,10], units='m', locked=True)
+        self.params.z = Parameter(at[2], self, 'z', range=[-10,10], units='m', locked=True)
+        self._params.x = ManualParameter(at[0], self, 'x', range=[-10,10], units='m', locked=True)
+        self._params.y = ManualParameter(at[1], self, 'y', range=[-10,10], units='m', locked=True)
+        self._params.z = ManualParameter(at[2], self, 'z', range=[-10,10], units='m', locked=True)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -99,12 +103,12 @@ class ToPointPoint(Point):
     def __init__(self, linkage, name, at, parent):
         super(ToPointPoint, self).__init__(linkage, name)
         self.parent = parent
-        self.params.x = Parameter(at[0], locked=False)
-        self.params.y = Parameter(at[1], locked=False)
-        self.params.z = Parameter(at[2], locked=False)
-        self._params.x = ManualParameter(at[0], locked=False)
-        self._params.y = ManualParameter(at[1], locked=False)
-        self._params.z = ManualParameter(at[2], locked=False)
+        self.params.x = Parameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
+        self.params.y = Parameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
+        self.params.z = Parameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
+        self._params.x = ManualParameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
+        self._params.y = ManualParameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
+        self._params.z = ManualParameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -212,6 +216,7 @@ class CalculatedAnteriorGammaPoint(CalculatedPoint):
             gamma = self.parent._params.gamma()
         else:
             gamma = self.parent.params.gamma()
+        gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
         dr = self.parent.parent2.r - self.parent.parent1.r
         u = dr/(dr.pow(2).sum().pow(0.5))
         R = self.parent.L*u
@@ -260,6 +265,7 @@ class CalculatedPosteriorGammaPoint(CalculatedPoint):
             gamma = self.parent._params.gamma()
         else:
             gamma = self.parent.params.gamma()
+        gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
         dr = self.parent.parent2.r - self.parent.parent1.r
         u = dr/(dr.pow(2).sum().pow(0.5))
         R = self.parent.L*u
@@ -271,8 +277,8 @@ class OnLinePoint(Point):
         super(OnLinePoint, self).__init__(linkage, name)
         self.parent = parent
         alpha = 0.5 if alpha is None else alpha
-        self.params.alpha = Parameter([alpha], locked=False)
-        self._params.alpha = ManualParameter([alpha], locked=False)
+        self.params.alpha = Parameter([alpha], self, 'alpha', range=[0,1], units=None, locked=False)
+        self._params.alpha = ManualParameter([alpha], self, 'alpha', range=[0,1], units=None, locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]

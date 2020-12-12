@@ -2,8 +2,12 @@ import torch, copy
 from munch import Munch
 
 class BaseParameter(torch.nn.Module):
-    def __init__(self, tensor, locked=False):
+    def __init__(self, tensor, parent, name, range, units, locked=False):
         super(BaseParameter, self).__init__()
+        self.parent = parent
+        self.name = name
+        self.range = range
+        self.units = units
         self.locked = locked
         self._tensor = None
         self.tensor = tensor
@@ -12,7 +16,8 @@ class BaseParameter(torch.nn.Module):
         return(self.tensor)
     
     def __repr__(self):
-        return('{}({}, locked={})'.format(self.__class__.__name__, str(self.tensor), self.locked))
+        return('{}({}, range={}, units={}, locked={})'.format(
+            self.__class__.__name__, str(self.tensor), self.range, self.units, self.locked))
     
     @property
     def tensor(self):
@@ -26,6 +31,19 @@ class BaseParameter(torch.nn.Module):
             self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float)
         else:
             self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float)) 
+        
+    @property
+    def min(self):
+        return(self.range[0])
+    
+    @property
+    def max(self):
+        return(self.range[1])
+    
+    @property
+    def full_name(self):
+        full_name = '{}.{}.{}'.format(self.parent.type, self.parent.name, self.name)
+        return(full_name)
         
     def lock(self):
         self.locked = True
@@ -60,14 +78,15 @@ class BaseGeometry(torch.nn.Module):
                 free_params.append(param)
         return(free_params)
     
-    def set_parameter(self, param_name, value):
+    def set_parameter(self, param_name, value, solve=True):
         self.params[param_name].tensor = value
         self._params[param_name].tensor = value
         self.linkage.plot.update()
-        try:
-            self.linkage.update()
-        except:
-            pass
+        if solve:
+            try:
+                self.linkage.update()
+            except:
+                pass
         
     def lock(self, param_name=None):
         param_names = self.params.keys() if param_name is None else [param_name]

@@ -16,6 +16,10 @@ class Line(BaseGeometry):
         self.p2 = None
         
     @property
+    def type(self):
+        return('line')
+        
+    @property
     def r(self):
         return(self.p2.r-self.p1.r)
     
@@ -47,10 +51,14 @@ class FromPointLine(Line):
         self.uz = uz
         self.p1 = OnPointPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=parent)
         self.p2 = CalculatedAlphaPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR], locked=self.locked)
-        self.params.phi = Parameter([phi/ANGLE_FACTOR], locked=True)
-        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR], locked=self.locked)
-        self._params.phi = ManualParameter([phi/ANGLE_FACTOR], locked=True)
+        self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR],
+            self, 'theta', range=[0,2*np.pi], units='rad', locked=self.locked)
+        self.params.phi = Parameter([phi/ANGLE_FACTOR],
+            self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
+        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR],
+            self, 'theta', range=[0,2*np.pi], units='rad', locked=self.locked)
+        self._params.phi = ManualParameter([phi/ANGLE_FACTOR],
+            self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
         
     def __repr__(self):
         label = self.__class__.__name__[:-4]
@@ -82,9 +90,10 @@ class FromPointsLine(Line):
         
     def E(self):
         if self.is_length_constrained() and self.target_length is not None:
-            #E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
-            E = (self.p2.r-self.p1.r).pow(2).sum()-torch.tensor(self.target_length).pow(2)
-            E = (torch.abs(E)).pow(0.5)
+            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
+            E = E.pow(0.5)
+            #E = (self.p2.r-self.p1.r).pow(2).sum()-torch.tensor(self.target_length).pow(2)
+            #E = (torch.abs(E)).pow(0.5)
             return(E)
         return(0)
     
@@ -107,12 +116,18 @@ class OnPointLine(Line):
         beta = 0.5 if beta is None else beta
         self.p1 = CalculatedAnteriorPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
         self.p2 = CalculatedPosteriorPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR], locked=False)
-        self.params.phi = Parameter([phi/ANGLE_FACTOR], locked=True)
-        self.params.beta = Parameter([beta], locked=False)
-        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR], locked=False)
-        self._params.phi = ManualParameter([phi/ANGLE_FACTOR], locked=True)
-        self._params.beta = ManualParameter([beta], locked=False)
+        self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR],
+            self, 'theta', range=[0,2*np.pi], units='rad', locked=False)
+        self.params.phi = Parameter([phi/ANGLE_FACTOR],
+            self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
+        self.params.beta = Parameter([beta],
+            self, 'beta', range=[0,1], units=None, locked=False)
+        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR],
+            self, 'theta', range=[0,2*np.pi], units='rad', locked=False)
+        self._params.phi = ManualParameter([phi/ANGLE_FACTOR],
+            self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
+        self._params.beta = ManualParameter([beta],
+            self, 'beta', range=[0,1], units=None, locked=False)
     
     def __repr__(self):
         return('Debug this.')
@@ -132,8 +147,8 @@ class OnPointsLine(Line):
         gamma = 0.5 if gamma is None else gamma
         self.p1 = CalculatedAnteriorGammaPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
         self.p2 = CalculatedPosteriorGammaPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
-        self.params.gamma = Parameter([gamma], locked=False)
-        self._params.gamma = ManualParameter([gamma], locked=False)
+        self.params.gamma = Parameter([gamma], self, 'gamma', range=[0,1], units=None, locked=False)
+        self._params.gamma = ManualParameter([gamma], self, 'gamma', range=[0,1], units=None, locked=False)
     
     def __repr__(self):
         return('Debug this.')
