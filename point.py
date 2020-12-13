@@ -237,11 +237,19 @@ class CalculatedPosteriorPoint(CalculatedPoint):
     @property
     def r(self):
         dr = self.get_dr()
+        if dr.dim() == 1:
+            dr = dr.view(-1,3)
         if self.linkage.use_manual_params:
             beta = self.parent._params.beta()
         else:
             beta = self.parent.params.beta()
+        beta = beta.unsqueeze(beta.dim())
+        for d in range(dr.dim()-1):
+            beta = beta.unsqueeze(0)
+            dr = dr.unsqueeze(dr.dim()-1)
         r = self.parent.parent.r + (1-beta) * dr
+        if not self.linkage.use_manual_params:
+            r = r.squeeze()
         return(r)
 
 class CalculatedPosteriorGammaPoint(CalculatedPoint):

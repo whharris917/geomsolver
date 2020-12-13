@@ -78,12 +78,13 @@ class BaseGeometry(torch.nn.Module):
                 free_params.append(param)
         return(free_params)
     
-    def set_parameter(self, param_name, value, manual=False, solve=True):
+    def set_parameter(self, param_name, value, manual=False, solve=True, update=True):
         if manual:
             self._params[param_name].tensor = value
         else:
             self.params[param_name].tensor = value
-        self.linkage.config_plot.update()
+        if update:
+            self.linkage.config_plot.update()
         if solve:
             try:
                 self.linkage.update()

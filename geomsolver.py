@@ -117,7 +117,7 @@ class Linkage():
         else:
             raise Exception('Invalid parameter name.')
         
-    def set_parameter(self, full_param_name, value, manual=False, solve=True):
+    def set_parameter(self, full_param_name, value, manual=False, solve=True, update=True):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type in ['Point', 'point']:
             obj = self.points[obj_name]
@@ -125,7 +125,7 @@ class Linkage():
             obj = self.lines[obj_name]
         else:
             raise Exception('Object type must be point or line.')
-        obj.set_parameter(param_name, value, manual, solve)
+        obj.set_parameter(param_name, value, manual, solve, update)
     
     def get_param_dict(self):
         parameters = {}
@@ -333,17 +333,20 @@ class EnergyPlot():
         self.ax.set_title('Energy')
         self.fig.canvas.draw()
         
-    def show_controller(self):
+    def show_controller(self, manual=True, show_configs=False):
         param_dict = self.linkage.get_param_dict()
         x_widget = widgets.Dropdown(options=param_dict.keys())
         y_widget = widgets.Dropdown(options=param_dict.keys())
-        interact_manual(self.update, x_name=x_widget, y_name=y_widget);
+        if manual:
+            interact_manual(self.update, x_name=x_widget, y_name=y_widget, show_configs=show_configs)
+        else:
+            interact(self.update, x_name=x_widget, y_name=y_widget, show_configs=show_configs)
     
-    def update(self, x_name, y_name):
+    def update(self, x_name, y_name, show_configs=False):
         self.x = self.linkage.get_parameter(x_name)
         self.y = self.linkage.get_parameter(y_name)
         self.draw_axes()
-        self.draw_contour_plot()
+        self.draw_contour_plot(show_configs)
         
     def draw_axes(self):
         self.ax.set_xlim([self.x.min,self.x.max])
@@ -351,23 +354,27 @@ class EnergyPlot():
         self.ax.set_xlabel('{} ({})'.format(self.x.full_name, self.x.units))
         self.ax.set_ylabel('{} ({})'.format(self.y.full_name, self.y.units))
     
-    def draw_contour_plot(self):
+    def draw_contour_plot(self, show_configs=False):
         L = 4
         alpha = 0.8
         d_target = 0.3
         x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
-        y = np.linspace(self.x.min, self.x.max, self.num_param_steps)
-        X, Y = np.meshgrid(x, y)
+        y = np.linspace(self.y.min, self.y.max, self.num_param_steps)
+        X, Y = np.meshgrid(x, y)        
         E = np.zeros((X.shape[0], X.shape[1]))
+        x0 = self.linkage.get_parameter(self.x.full_name).tensor.tolist()
+        y0 = self.linkage.get_parameter(self.y.full_name).tensor.tolist()
         for i in range(X.shape[0]):
             for j in range(X.shape[1]):
                 x, y = X[i][j], Y[i][j]
-                self.linkage.set_parameter(self.x.full_name, X[i][j], solve=False)
-                self.linkage.set_parameter(self.y.full_name, Y[i][j], solve=False)
+                self.linkage.set_parameter(self.x.full_name, X[i][j], solve=False, update=show_configs)
+                self.linkage.set_parameter(self.y.full_name, Y[i][j], solve=False, update=show_configs)
                 E[i][j] = self.linkage.energy()
-        contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap) 
+        self.linkage.set_parameter(self.x.full_name, x0, solve=False, update=True)
+        self.linkage.set_parameter(self.y.full_name, y0, solve=False, update=True)
+        contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
         x = self.x.tensor.item()
-        y = self.x.tensor.item()
+        y = self.y.tensor.item()
         self.ax.scatter(x=[x], y=[y], c='white', s=25)
         #self.fig.colorbar(contourmap)
         self.fig.canvas.draw()

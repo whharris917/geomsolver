@@ -91,11 +91,15 @@ class FromPointsLine(Line):
         
     def E(self):
         if self.is_length_constrained() and self.target_length is not None:
-            E = ((self.p2.r-self.p1.r.view(1,1,3)).pow(2).sum(2).pow(0.5)-self.target_length).pow(2)
+            r1 = self.p1.r
+            r2 = self.p2.r
+            for d in range(r1.dim()-1):
+                r2 = r2.unsqueeze(0)
+                r1 = r1.unsqueeze(r1.dim()-1)
+            E = ((r2-r1).pow(2).sum(-1).pow(0.5)-self.target_length).pow(2)
             E = E.pow(0.5)
-            E = E.squeeze()
-            #E = (self.p2.r-self.p1.r).pow(2).sum()-torch.tensor(self.target_length).pow(2)
-            #E = (torch.abs(E)).pow(0.5)
+            if not self.linkage.use_manual_params:
+                E = E.squeeze()
             return(E)
         return(0)
     
