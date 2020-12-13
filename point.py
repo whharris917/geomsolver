@@ -152,16 +152,19 @@ class CalculatedPoint(Point):
         ay = torch.cross(az, ax)
         if self.linkage.use_manual_params:
             theta = self.parent._params.theta()*ANGLE_FACTOR
-            phi = self.parent._params.phi()*ANGLE_FACTOR         
+            phi = self.parent._params.phi()*ANGLE_FACTOR      
         else:
             theta = self.parent.params.theta()*ANGLE_FACTOR
             phi = self.parent.params.phi()*ANGLE_FACTOR
+        theta = theta.view(-1,1)
+        phi = phi.view(1,-1)
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
-        uz = torch.cos(phi)
-        dr = self.parent.L * torch.cat([ux, uy, uz])
+        uz = torch.cos(phi).expand(ux.shape[0],ux.shape[1])
+        dr = self.parent.L * torch.stack([ux, uy, uz], dim=2) #torch.cat([ux, uy, uz])
         R = torch.stack([ax, ay, az], dim=1)
-        dr = torch.matmul(R,dr)
+        dr = torch.matmul(R.unsqueeze(0).unsqueeze(0), dr.unsqueeze(3)) #torch.matmul(R,dr)
+        dr = dr.squeeze()
         return(dr)
     
     def root(self):

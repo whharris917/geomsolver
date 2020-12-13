@@ -28,9 +28,9 @@ class BaseParameter(torch.nn.Module):
         if type(_tensor) is not list:
             _tensor = [_tensor]
         if self.locked:
-            self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float)
+            self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float) #.view(-1,1)
         else:
-            self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float)) 
+            self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float)) #.view(-1,1)
         
     @property
     def min(self):
@@ -78,10 +78,12 @@ class BaseGeometry(torch.nn.Module):
                 free_params.append(param)
         return(free_params)
     
-    def set_parameter(self, param_name, value, solve=True):
-        self.params[param_name].tensor = value
-        self._params[param_name].tensor = value
-        self.linkage.plot.update()
+    def set_parameter(self, param_name, value, manual=False, solve=True):
+        if manual:
+            self._params[param_name].tensor = value
+        else:
+            self.params[param_name].tensor = value
+        self.linkage.config_plot.update()
         if solve:
             try:
                 self.linkage.update()

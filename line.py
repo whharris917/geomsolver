@@ -81,17 +81,19 @@ class FromPointsLine(Line):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
-    def constrain_length(self, L):
+    def constrain_length(self, L, solve=True):
         if self.p1.root().__class__.__name__ is 'AnchorPoint':
             if self.p2.root().__class__.__name__ is 'AnchorPoint':
                 raise Exception('Cannot constrain the length of a line with anchored endpoints.')
         self.target_length = L
-        self.linkage.update()
+        if solve:
+            self.linkage.update()
         
     def E(self):
         if self.is_length_constrained() and self.target_length is not None:
-            E = ((self.p2.r-self.p1.r).pow(2).sum().pow(0.5)-self.target_length).pow(2)
+            E = ((self.p2.r-self.p1.r.view(1,1,3)).pow(2).sum(2).pow(0.5)-self.target_length).pow(2)
             E = E.pow(0.5)
+            E = E.squeeze()
             #E = (self.p2.r-self.p1.r).pow(2).sum()-torch.tensor(self.target_length).pow(2)
             #E = (torch.abs(E)).pow(0.5)
             return(E)
