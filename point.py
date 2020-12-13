@@ -14,7 +14,13 @@ class Point(BaseGeometry):
     @property
     def r(self):
         raise Exception('Override this property.')
-
+        
+    @property
+    def _r(self):
+        with self.linkage.manual():
+            return(self.r)
+        return(_r)
+        
     def root(self):
         raise Exception('Override this method.')
         

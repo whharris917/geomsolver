@@ -1,6 +1,7 @@
 import numpy as np
 from scipy import optimize
 import torch, itertools, string, time
+from contextlib import contextmanager
 from munch import Munch
 from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
 from line import FromPointLine, FromPointsLine, OnPointLine, OnPointsLine
@@ -107,6 +108,12 @@ class Linkage():
     @property
     def M(self):
         return(len(self.lines))
+
+    @contextmanager
+    def manual(self):
+        self.use_manual_params = True
+        yield
+        self.use_manual_params = False
     
     def get_parameter(self, full_param_name):
         obj_type, obj_name, param_name = full_param_name.split('.')
@@ -143,21 +150,23 @@ class Linkage():
                     parameters[label] = _param
         return(parameters)
        
-    def energy(self, use_manual_params=False):
-        self.use_manual_params = use_manual_params
+    def energy(self):
         E = 0.0
         for point in self.points.values():
             E += point.E()
         for line in self.lines.values():
             E += line.E()
-        self.use_manual_params = False
         return(E)
+        
+    def _energy(self):
+        with self.manual():
+            return(self.energy())
         
     def update(self, max_num_epochs=10000):
         optimizer = torch.optim.SGD(self.get_param_dict().values(), lr=LR)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
-            E = self.energy(use_manual_params=False)
+            E = self.energy()
             E.backward()
             optimizer.step()
             if E <= self.tolerance:
