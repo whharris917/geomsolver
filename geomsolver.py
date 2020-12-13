@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import optimize
-import torch, itertools, string, time
+import torch, itertools, string, time, copy
 from contextlib import contextmanager
 from munch import Munch
 from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
@@ -108,12 +108,20 @@ class Linkage():
     @property
     def M(self):
         return(len(self.lines))
-
+    
     @contextmanager
-    def manual(self):
+    def manual_on(self):
+        use_manual_params_0 = copy.deepcopy(self.use_manual_params)
         self.use_manual_params = True
         yield
+        self.use_manual_params = use_manual_params_0
+    
+    @contextmanager
+    def manual_off(self):
+        use_manual_params_0 = copy.deepcopy(self.use_manual_params)
         self.use_manual_params = False
+        yield
+        self.use_manual_params = use_manual_params_0
     
     def get_parameter(self, full_param_name):
         obj_type, obj_name, param_name = full_param_name.split('.')
@@ -124,7 +132,7 @@ class Linkage():
         else:
             raise Exception('Invalid parameter name.')
         
-    def set_parameter(self, full_param_name, value, manual=False, solve=True, update=True):
+    def set_parameter(self, full_param_name, value, solve=True, update=True):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type in ['Point', 'point']:
             obj = self.points[obj_name]
@@ -132,24 +140,31 @@ class Linkage():
             obj = self.lines[obj_name]
         else:
             raise Exception('Object type must be point or line.')
-        obj.set_parameter(param_name, value, manual, solve, update)
-    
-    def get_param_dict(self):
+        obj.set_parameter(param_name, value, solve, update)
+       
+    def get_param_dict(self, get_torch_params=False):
         parameters = {}
         for point in self.points.values():
-            for param_name in point.params.keys():
-                param = point.params[param_name]
-                for _param in param.parameters():
-                    label = 'point.{}.{}'.format(point.name, param_name)
-                    parameters[label] = _param
+            for param in point.params.values():
+                if param.locked:
+                    continue
+                if get_torch_params and bool(list(param.parameters())):
+                    parameters[param.full_name] = list(param.parameters())[0]
+                elif not get_torch_params:
+                    parameters[param.full_name] = param
         for line in self.lines.values():
-            for param_name in line.params.keys():
-                param = line.params[param_name]
-                for _param in param.parameters():
-                    label = 'line.{}.{}'.format(line.name, param_name)
-                    parameters[label] = _param
+            for param in line.params.values():
+                if param.locked:
+                    continue
+                if get_torch_params and bool(list(param.parameters())):
+                    parameters[param.full_name] = list(param.parameters())[0]
+                elif not get_torch_params:
+                    parameters[param.full_name] = param
         return(parameters)
-       
+        
+    def get_torch_param_dict(self):
+        return(self.get_param_dict(get_torch_params=True))
+        
     def energy(self):
         E = 0.0
         for point in self.points.values():
@@ -159,11 +174,11 @@ class Linkage():
         return(E)
         
     def _energy(self):
-        with self.manual():
+        with self.manual_on():
             return(self.energy())
         
     def update(self, max_num_epochs=10000):
-        optimizer = torch.optim.SGD(self.get_param_dict().values(), lr=LR)
+        optimizer = torch.optim.SGD(self.get_torch_param_dict().values(), lr=LEARNING_RATE)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
             E = self.energy()
@@ -180,18 +195,12 @@ class Linkage():
         self.config_plot.update()
         time.sleep(0.01)
         
-    def create_controller(self, manual=False):
+    def create_controller(self, wait=False):
         
         linkage = self
-
-        if False:
-            obj_type_widget = widgets.Dropdown(options=['obj_type', 'point', 'line'])
-            obj_name_widget = widgets.Dropdown(options=['obj_name'])
-            param_name_widget = widgets.Dropdown(options=['param_name'])
-        else:
-            obj_type_widget = widgets.Dropdown(options=['point', 'line'])
-            obj_name_widget = widgets.Dropdown(options=['D'])
-            param_name_widget = widgets.Dropdown(options=['alpha'])    
+        obj_type_widget = widgets.Dropdown(options=['point', 'line'])
+        obj_name_widget = widgets.Dropdown(options=['D'])
+        param_name_widget = widgets.Dropdown(options=['alpha'])    
         value_widget = widgets.FloatSlider(min=0, max=1, step=0.05, value=0.15)
 
         def update_obj_name_options(*args):
@@ -238,22 +247,20 @@ class Linkage():
             value_widget.value = _value
         param_name_widget.observe(update_param_bounds, 'value')
 
-        if manual:
+        if wait:
             interact_manual(
                 linkage.set_parameter,
                 obj_type=obj_type_widget,
                 obj_name=obj_name_widget,
                 param_name=param_name_widget,
-                value=value_widget
-            );
+                value=value_widget)
         else:
             interact(
                 linkage.set_parameter,
                 obj_type=obj_type_widget,
                 obj_name=obj_name_widget,
                 param_name=param_name_widget,
-                value=value_widget
-            );
+                value=value_widget)
         
 class LinkagePlot():
     def __init__(self, linkage, show_origin=True):
@@ -280,45 +287,43 @@ class LinkagePlot():
         self.fig.canvas.draw()
     
     def update(self):
-        
-        for point_name in self.linkage.points.keys():
-            if self.linkage.points[point_name].__class__.__name__ is 'AnchorPoint':
-                color = 'blue'
-                size = 150
-            else:
-                color = 'limegreen'
-                size = 50
-            if point_name not in self.points.keys():
-                point = self.ax.scatter([], [], s=size, c=color,
-                    zorder=0, label=point_name)
-                self.points[point_name] = point
-            point = self.linkage.points[point_name]
-            self.points[point_name].set_offsets(
-                [[point.r[0],point.r[1]]])
-                
-        for line_name in self.linkage.lines.keys():
-            ls, lw = ':', 1
-            if self.linkage.lines[line_name].is_length_constrained():
-                ls, lw = '-', 1
-            if line_name not in self.lines.keys():
-                line, = self.ax.plot([], [],
-                    linestyle=ls, markersize=3, lw=lw, 
-                    c='black', zorder=0, label=line_name)
-                self.lines[line_name] = line
-            line = self.linkage.lines[line_name]
-            self.lines[line_name].set_data(
-                [line.p1.r[0],line.p2.r[0]],
-                [line.p1.r[1],line.p2.r[1]])
-            self.lines[line_name].set_linestyle(ls)
-            self.lines[line_name].set_linewidth(lw)
-            for p in [line.p1, line.p2]:
-                if p.name not in self.points.keys():
-                    point = self.ax.scatter([], [],
-                        s=10, c='red', zorder=0, label=p.name)
-                    self.points[p.name] = point
-                self.points[p.name].set_offsets(
-                    [[p.r[0],p.r[1]]])
-            
+        with self.linkage.manual_off():
+            for point_name in self.linkage.points.keys():
+                if self.linkage.points[point_name].__class__.__name__ is 'AnchorPoint':
+                    color = 'blue'
+                    size = 150
+                else:
+                    color = 'limegreen'
+                    size = 50
+                if point_name not in self.points.keys():
+                    point = self.ax.scatter([], [], s=size, c=color,
+                        zorder=0, label=point_name)
+                    self.points[point_name] = point
+                point = self.linkage.points[point_name]
+                self.points[point_name].set_offsets(
+                    [[point.r[0],point.r[1]]])
+            for line_name in self.linkage.lines.keys():
+                ls, lw = ':', 1
+                if self.linkage.lines[line_name].is_length_constrained():
+                    ls, lw = '-', 1
+                if line_name not in self.lines.keys():
+                    line, = self.ax.plot([], [],
+                        linestyle=ls, markersize=3, lw=lw, 
+                        c='black', zorder=0, label=line_name)
+                    self.lines[line_name] = line
+                line = self.linkage.lines[line_name]
+                self.lines[line_name].set_data(
+                    [line.p1.r[0],line.p2.r[0]],
+                    [line.p1.r[1],line.p2.r[1]])
+                self.lines[line_name].set_linestyle(ls)
+                self.lines[line_name].set_linewidth(lw)
+                for p in [line.p1, line.p2]:
+                    if p.name not in self.points.keys():
+                        point = self.ax.scatter([], [],
+                            s=10, c='red', zorder=0, label=p.name)
+                        self.points[p.name] = point
+                    self.points[p.name].set_offsets(
+                        [[p.r[0],p.r[1]]])
         #self.time_text.set_text('')
         self.fig.canvas.draw()
         
@@ -342,11 +347,11 @@ class EnergyPlot():
         self.ax.set_title('Energy')
         self.fig.canvas.draw()
         
-    def show_controller(self, manual=True, show_configs=False):
-        param_dict = self.linkage.get_param_dict()
-        x_widget = widgets.Dropdown(options=param_dict.keys())
-        y_widget = widgets.Dropdown(options=param_dict.keys())
-        if manual:
+    def show_controller(self, wait=True, show_configs=False):
+        param_names = self.linkage.get_param_dict().keys()
+        x_widget = widgets.Dropdown(options=param_names)
+        y_widget = widgets.Dropdown(options=param_names)
+        if wait:
             interact_manual(self.update, x_name=x_widget, y_name=y_widget, show_configs=show_configs)
         else:
             interact(self.update, x_name=x_widget, y_name=y_widget, show_configs=show_configs)
@@ -364,23 +369,20 @@ class EnergyPlot():
         self.ax.set_ylabel('{} ({})'.format(self.y.full_name, self.y.units))
     
     def draw_contour_plot(self, show_configs=False):
-        L = 4
-        alpha = 0.8
-        d_target = 0.3
-        x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
-        y = np.linspace(self.y.min, self.y.max, self.num_param_steps)
-        X, Y = np.meshgrid(x, y)        
-        E = np.zeros((X.shape[0], X.shape[1]))
+        if show_configs:
+            raise Exception('Debug this.')
         x0 = self.linkage.get_parameter(self.x.full_name).tensor.tolist()
         y0 = self.linkage.get_parameter(self.y.full_name).tensor.tolist()
-        for i in range(X.shape[0]):
-            for j in range(X.shape[1]):
-                x, y = X[i][j], Y[i][j]
-                self.linkage.set_parameter(self.x.full_name, X[i][j], solve=False, update=show_configs)
-                self.linkage.set_parameter(self.y.full_name, Y[i][j], solve=False, update=show_configs)
-                E[i][j] = self.linkage.energy()
-        self.linkage.set_parameter(self.x.full_name, x0, solve=False, update=True)
-        self.linkage.set_parameter(self.y.full_name, y0, solve=False, update=True)
+        x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
+        y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
+        with self.linkage.manual_on():
+            self.linkage.set_parameter(self.x.full_name, x.tolist(), solve=False, update=False)
+            self.linkage.set_parameter(self.y.full_name, y.tolist(), solve=False, update=False)
+        E = self.linkage._energy().squeeze().tolist()
+        with self.linkage.manual_on():
+            self.linkage.set_parameter(self.x.full_name, x0, solve=False, update=True)
+            self.linkage.set_parameter(self.y.full_name, y0, solve=False, update=True)
+        X, Y = np.meshgrid(x, y)
         contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
         x = self.x.tensor.item()
         y = self.y.tensor.item()

@@ -1,6 +1,6 @@
 import torch
 from base import BaseGeometry
-from param import Parameter, ManualParameter
+from param import Parameter
 from settings import *
 
 class Point(BaseGeometry):
@@ -17,9 +17,8 @@ class Point(BaseGeometry):
         
     @property
     def _r(self):
-        with self.linkage.manual():
+        with self.linkage.manual_on():
             return(self.r)
-        return(_r)
         
     def root(self):
         raise Exception('Override this method.')
@@ -38,9 +37,6 @@ class AtPoint(Point):
         self.params.x = Parameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
         self.params.y = Parameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
         self.params.z = Parameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
-        self._params.x = ManualParameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
-        self._params.y = ManualParameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
-        self._params.z = ManualParameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
     
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -49,7 +45,7 @@ class AtPoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
+            return(torch.cat([self.params.x.manual(), self.params.y.manual(), self.params.z.manual()]))
         else:
             return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
     
@@ -65,9 +61,6 @@ class AnchorPoint(Point):
         self.params.x = Parameter(at[0], self, 'x', range=[-10,10], units='m', locked=True)
         self.params.y = Parameter(at[1], self, 'y', range=[-10,10], units='m', locked=True)
         self.params.z = Parameter(at[2], self, 'z', range=[-10,10], units='m', locked=True)
-        self._params.x = ManualParameter(at[0], self, 'x', range=[-10,10], units='m', locked=True)
-        self._params.y = ManualParameter(at[1], self, 'y', range=[-10,10], units='m', locked=True)
-        self._params.z = ManualParameter(at[2], self, 'z', range=[-10,10], units='m', locked=True)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -76,7 +69,7 @@ class AnchorPoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
+            return(torch.cat([self.params.x.manual(), self.params.y.manual(), self.params.z.manual()]))
         else:
             return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
         
@@ -112,9 +105,6 @@ class ToPointPoint(Point):
         self.params.x = Parameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
         self.params.y = Parameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
         self.params.z = Parameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
-        self._params.x = ManualParameter(at[0], self, 'x', range=[-10,10], units='m', locked=False)
-        self._params.y = ManualParameter(at[1], self, 'y', range=[-10,10], units='m', locked=False)
-        self._params.z = ManualParameter(at[2], self, 'z', range=[-10,10], units='m', locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -123,7 +113,7 @@ class ToPointPoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            return(torch.cat([self._params.x(), self._params.y(), self._params.z()]))
+            return(torch.cat([self.params.x.manual(), self.params.y.manual(), self.params.z.manual()]))
         else:
             return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
     
@@ -157,8 +147,8 @@ class CalculatedPoint(Point):
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
         if self.linkage.use_manual_params:
-            theta = self.parent._params.theta()*ANGLE_FACTOR
-            phi = self.parent._params.phi()*ANGLE_FACTOR      
+            theta = self.parent.params.theta.manual()*ANGLE_FACTOR
+            phi = self.parent.params.phi.manual()*ANGLE_FACTOR      
         else:
             theta = self.parent.params.theta()*ANGLE_FACTOR
             phi = self.parent.params.phi()*ANGLE_FACTOR
@@ -189,6 +179,7 @@ class CalculatedAlphaPoint(CalculatedPoint):
         
     @property
     def r(self):
+        raise Exception('Debug this.')
         dr = self.get_dr()
         r = self.parent.p1.r + dr
         return(r)
@@ -204,11 +195,19 @@ class CalculatedAnteriorPoint(CalculatedPoint):
     @property
     def r(self):
         dr = self.get_dr()
+        if dr.dim() == 1:
+            dr = dr.view(-1,3)
         if self.linkage.use_manual_params:
-            beta = self.parent._params.beta()
+            beta = self.parent.params.beta.manual()
         else:
             beta = self.parent.params.beta()
+        beta = beta.unsqueeze(beta.dim())
+        for d in range(dr.dim()-1):
+            beta = beta.unsqueeze(0)
+            dr = dr.unsqueeze(dr.dim()-1)
         r = self.parent.parent.r - beta * dr
+        if not self.linkage.use_manual_params:
+            r = r.squeeze()
         return(r)
     
 class CalculatedAnteriorGammaPoint(CalculatedPoint):
@@ -220,9 +219,10 @@ class CalculatedAnteriorGammaPoint(CalculatedPoint):
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
         
     @property
-    def r(self):   
+    def r(self):
+        raise Exception('Debug this.')
         if self.linkage.use_manual_params:
-            gamma = self.parent._params.gamma()
+            gamma = self.parent.params.gamma.manual()
         else:
             gamma = self.parent.params.gamma()
         gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
@@ -246,7 +246,7 @@ class CalculatedPosteriorPoint(CalculatedPoint):
         if dr.dim() == 1:
             dr = dr.view(-1,3)
         if self.linkage.use_manual_params:
-            beta = self.parent._params.beta()
+            beta = self.parent.params.beta.manual()
         else:
             beta = self.parent.params.beta()
         beta = beta.unsqueeze(beta.dim())
@@ -265,21 +265,12 @@ class CalculatedPosteriorGammaPoint(CalculatedPoint):
     def __repr__(self):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
-        
-    @property
-    def r(self):
-        dr = self.get_dr()
-        if self.linkage.use_manual_params:
-            beta = self.parent._params.beta()
-        else:
-            beta = self.parent.params.beta()
-        r = self.parent.parent.r + (1-beta) * dr
-        return(r)
     
     @property
-    def r(self):   
+    def r(self):
+        raise Exception('Debug this.')
         if self.linkage.use_manual_params:
-            gamma = self.parent._params.gamma()
+            gamma = self.parent.params.gamma.manual()
         else:
             gamma = self.parent.params.gamma()
         gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
@@ -295,7 +286,6 @@ class OnLinePoint(Point):
         self.parent = parent
         alpha = 0.5 if alpha is None else alpha
         self.params.alpha = Parameter([alpha], self, 'alpha', range=[0,1], units=None, locked=False)
-        self._params.alpha = ManualParameter([alpha], self, 'alpha', range=[0,1], units=None, locked=False)
         
     def __repr__(self):
         label = self.__class__.__name__[:-5]
@@ -304,7 +294,7 @@ class OnLinePoint(Point):
     @property
     def r(self):
         if self.linkage.use_manual_params:
-            alpha = self._params.alpha()
+            alpha = self.params.alpha.manual()
         else:
             alpha = self.params.alpha()
         return((1-alpha)*self.parent.p1.r+alpha*self.parent.p2.r)

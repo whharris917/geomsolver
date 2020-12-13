@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from base import BaseGeometry
-from param import Parameter, ManualParameter
+from param import Parameter
 from point import (
     Point, AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint,
     CalculatedAlphaPoint, CalculatedAnteriorPoint, CalculatedPosteriorPoint,
@@ -54,10 +54,6 @@ class FromPointLine(Line):
         self.params.theta = Parameter([theta*np.pi/180/ANGLE_FACTOR],
             self, 'theta', range=[0,2*np.pi], units='rad', locked=self.locked)
         self.params.phi = Parameter([phi/ANGLE_FACTOR],
-            self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
-        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR],
-            self, 'theta', range=[0,2*np.pi], units='rad', locked=self.locked)
-        self._params.phi = ManualParameter([phi/ANGLE_FACTOR],
             self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
         
     def __repr__(self):
@@ -128,12 +124,6 @@ class OnPointLine(Line):
             self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
         self.params.beta = Parameter([beta],
             self, 'beta', range=[0,1], units=None, locked=False)
-        self._params.theta = ManualParameter([theta*np.pi/180/ANGLE_FACTOR],
-            self, 'theta', range=[0,2*np.pi], units='rad', locked=False)
-        self._params.phi = ManualParameter([phi/ANGLE_FACTOR],
-            self, 'phi', range=[0,2*np.pi], units='rad', locked=True)
-        self._params.beta = ManualParameter([beta],
-            self, 'beta', range=[0,1], units=None, locked=False)
     
     def __repr__(self):
         return('Debug this.')
@@ -154,7 +144,6 @@ class OnPointsLine(Line):
         self.p1 = CalculatedAnteriorGammaPoint(self.linkage, '{}.{}'.format(self.name, '1'), parent=self)
         self.p2 = CalculatedPosteriorGammaPoint(self.linkage, '{}.{}'.format(self.name, '2'), parent=self)
         self.params.gamma = Parameter([gamma], self, 'gamma', range=[0,1], units=None, locked=False)
-        self._params.gamma = ManualParameter([gamma], self, 'gamma', range=[0,1], units=None, locked=False)
     
     def __repr__(self):
         return('Debug this.')

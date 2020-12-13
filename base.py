@@ -78,18 +78,15 @@ class BaseGeometry(torch.nn.Module):
                 free_params.append(param)
         return(free_params)
     
-    def set_parameter(self, param_name, value, manual=False, solve=True, update=True):
-        if manual:
-            self._params[param_name].tensor = value
+    def set_parameter(self, param_name, value, solve=True, update=True):
+        if self.linkage.use_manual_params:
+            self.params[param_name].manual.tensor = value
         else:
             self.params[param_name].tensor = value
         if update:
             self.linkage.config_plot.update()
-        if solve:
-            try:
-                self.linkage.update()
-            except:
-                pass
+        if solve and bool(self.linkage.get_parameter_dict().values()):
+            self.linkage.update()
         
     def lock(self, param_name=None):
         param_names = self.params.keys() if param_name is None else [param_name]
