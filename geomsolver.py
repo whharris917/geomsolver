@@ -29,6 +29,7 @@ class Linkage():
         self.energy_plot = None
         self.tolerance = TOLERANCE
         self.use_manual_params = False
+        self.solve  = True
         
     ######################################## Plots #########################################
 
@@ -123,6 +124,20 @@ class Linkage():
         yield
         self.use_manual_params = use_manual_params_0
     
+    @contextmanager
+    def solve_on(self):
+        solve_0 = copy.deepcopy(self.solve)
+        self.solve = True
+        yield
+        self.solve = solve_0
+    
+    @contextmanager
+    def solve_off(self):
+        solve_0 = copy.deepcopy(self.solve)
+        self.solve = False
+        yield
+        self.solve = solve_0
+    
     def get_parameter(self, full_param_name):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type == 'point':
@@ -132,7 +147,7 @@ class Linkage():
         else:
             raise Exception('Invalid parameter name.')
         
-    def set_parameter(self, full_param_name, value, solve=True):
+    def set_parameter(self, full_param_name, value):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type in ['Point', 'point']:
             obj = self.points[obj_name]
@@ -140,7 +155,7 @@ class Linkage():
             obj = self.lines[obj_name]
         else:
             raise Exception('Object type must be point or line.')
-        obj.set_parameter(param_name, value, solve)
+        obj.set_parameter(param_name, value)
        
     def get_param_dict(self, get_torch_params=False):
         parameters = {}
@@ -195,12 +210,12 @@ class Linkage():
         self.config_plot.update()
         time.sleep(0.01)
         
-    def create_controller(self, wait=False):
+    def show_controller(self, wait=False):
         
         linkage = self
         obj_type_widget = widgets.Dropdown(options=['point', 'line'])
-        obj_name_widget = widgets.Dropdown(options=['D'])
-        param_name_widget = widgets.Dropdown(options=['alpha'])    
+        obj_name_widget = widgets.Dropdown(options=['a'])
+        param_name_widget = widgets.Dropdown(options=['theta'])    
         value_widget = widgets.FloatSlider(min=0, max=1, step=0.05, value=0.15)
 
         def update_obj_name_options(*args):
@@ -371,28 +386,29 @@ class EnergyPlot():
     def draw_contour_plot(self, show_configs=False):
         if show_configs:
             raise Exception('Debug this.')
-        with self.linkage.manual_on():
-            x0 = self.linkage.get_parameter(self.x.full_name)().tolist()
-            y0 = self.linkage.get_parameter(self.y.full_name)().tolist()
-        for param in self.linkage.get_param_dict().values():
-            if param.full_name not in [self.x.full_name, self.y.full_name]:
-                param.reset()
-        x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
-        y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
-        with self.linkage.manual_on():
-            self.linkage.set_parameter(self.x.full_name, x.tolist(), solve=False)
-            self.linkage.set_parameter(self.y.full_name, y.tolist(), solve=False)
-        E = self.linkage._energy().squeeze().tolist()
-        with self.linkage.manual_on():
-            self.linkage.set_parameter(self.x.full_name, x0, solve=False)
-            self.linkage.set_parameter(self.y.full_name, y0, solve=False)
-        for param in self.linkage.get_param_dict().values():
-            if param.full_name not in [self.x.full_name, self.y.full_name]:
-                param.restore()
-        X, Y = np.meshgrid(x, y)
-        contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
-        x = self.x.tensor.item()
-        y = self.y.tensor.item()
-        self.ax.scatter(x=[x], y=[y], c='white', s=25)
-        #self.fig.colorbar(contourmap)
-        self.fig.canvas.draw()
+        with self.linkage.solve_off():
+            with self.linkage.manual_on():
+                x0 = self.linkage.get_parameter(self.x.full_name)().tolist()
+                y0 = self.linkage.get_parameter(self.y.full_name)().tolist()
+            for param in self.linkage.get_param_dict().values():
+                if param.full_name not in [self.x.full_name, self.y.full_name]:
+                    param.reset()
+            x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
+            y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
+            with self.linkage.manual_on():
+                self.linkage.set_parameter(self.x.full_name, x.tolist())
+                self.linkage.set_parameter(self.y.full_name, y.tolist())
+            E = self.linkage._energy().squeeze().tolist()
+            with self.linkage.manual_on():
+                self.linkage.set_parameter(self.x.full_name, x0)
+                self.linkage.set_parameter(self.y.full_name, y0)
+            for param in self.linkage.get_param_dict().values():
+                if param.full_name not in [self.x.full_name, self.y.full_name]:
+                    param.restore()
+            X, Y = np.meshgrid(x, y)
+            contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
+            x = self.x.tensor.item()
+            y = self.y.tensor.item()
+            self.ax.scatter(x=[x], y=[y], c='white', s=25)
+            #self.fig.colorbar(contourmap)
+            self.fig.canvas.draw()

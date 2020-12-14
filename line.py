@@ -77,12 +77,12 @@ class FromPointsLine(Line):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
-    def constrain_length(self, L, solve=True):
+    def constrain_length(self, L):
         if self.p1.root().__class__.__name__ is 'AnchorPoint':
             if self.p2.root().__class__.__name__ is 'AnchorPoint':
                 raise Exception('Cannot constrain the length of a line with anchored endpoints.')
         self.target_length = L
-        if solve:
+        if self.linkage.solve:
             self.linkage.update()
         
     def E(self):
