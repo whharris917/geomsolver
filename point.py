@@ -44,10 +44,7 @@ class AtPoint(Point):
     
     @property
     def r(self):
-        if self.linkage.use_manual_params:
-            return(torch.cat([self.params.x.manual(), self.params.y.manual(), self.params.z.manual()]))
-        else:
-            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
+        return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
     
     def root(self):
         return(self)
@@ -68,10 +65,7 @@ class AnchorPoint(Point):
         
     @property
     def r(self):
-        if self.linkage.use_manual_params:
-            return(torch.cat([self.params.x.manual(), self.params.y.manual(), self.params.z.manual()]))
-        else:
-            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
+        return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
         
     def root(self):
         return(self)
@@ -112,10 +106,7 @@ class ToPointPoint(Point):
         
     @property
     def r(self):
-        if self.linkage.use_manual_params:
-            return(torch.cat([self.params.x.manual(), self.params.y.manual(), self.params.z.manual()]))
-        else:
-            return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
+        return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
     
     def root(self):
         return(self)
@@ -146,20 +137,16 @@ class CalculatedPoint(Point):
         else:
             raise Exception('uz must be None, a list, or a Line.')
         ay = torch.cross(az, ax)
-        if self.linkage.use_manual_params:
-            theta = self.parent.params.theta.manual()*ANGLE_FACTOR
-            phi = self.parent.params.phi.manual()*ANGLE_FACTOR      
-        else:
-            theta = self.parent.params.theta()*ANGLE_FACTOR
-            phi = self.parent.params.phi()*ANGLE_FACTOR
+        theta = self.parent.params.theta()*ANGLE_FACTOR
+        phi = self.parent.params.phi()*ANGLE_FACTOR
         theta = theta.view(-1,1)
         phi = phi.view(1,-1)
         ux = torch.sin(phi)*torch.cos(theta)
         uy = torch.sin(phi)*torch.sin(theta)
         uz = torch.cos(phi).expand(ux.shape[0],ux.shape[1])
-        dr = self.parent.L * torch.stack([ux, uy, uz], dim=2) #torch.cat([ux, uy, uz])
+        dr = self.parent.L * torch.stack([ux, uy, uz], dim=2)
         R = torch.stack([ax, ay, az], dim=1)
-        dr = torch.matmul(R.unsqueeze(0).unsqueeze(0), dr.unsqueeze(3)) #torch.matmul(R,dr)
+        dr = torch.matmul(R.unsqueeze(0).unsqueeze(0), dr.unsqueeze(3))
         dr = dr.squeeze()
         return(dr)
     
@@ -197,10 +184,7 @@ class CalculatedAnteriorPoint(CalculatedPoint):
         dr = self.get_dr()
         if dr.dim() == 1:
             dr = dr.view(-1,3)
-        if self.linkage.use_manual_params:
-            beta = self.parent.params.beta.manual()
-        else:
-            beta = self.parent.params.beta()
+        beta = self.parent.params.beta()
         beta = beta.unsqueeze(beta.dim())
         for d in range(dr.dim()-1):
             beta = beta.unsqueeze(0)
@@ -221,10 +205,7 @@ class CalculatedAnteriorGammaPoint(CalculatedPoint):
     @property
     def r(self):
         raise Exception('Debug this.')
-        if self.linkage.use_manual_params:
-            gamma = self.parent.params.gamma.manual()
-        else:
-            gamma = self.parent.params.gamma()
+        gamma = self.parent.params.gamma()
         gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
         dr = self.parent.parent2.r - self.parent.parent1.r
         u = dr/(dr.pow(2).sum().pow(0.5))
@@ -245,10 +226,7 @@ class CalculatedPosteriorPoint(CalculatedPoint):
         dr = self.get_dr()
         if dr.dim() == 1:
             dr = dr.view(-1,3)
-        if self.linkage.use_manual_params:
-            beta = self.parent.params.beta.manual()
-        else:
-            beta = self.parent.params.beta()
+        beta = self.parent.params.beta()
         beta = beta.unsqueeze(beta.dim())
         for d in range(dr.dim()-1):
             beta = beta.unsqueeze(0)
@@ -269,10 +247,7 @@ class CalculatedPosteriorGammaPoint(CalculatedPoint):
     @property
     def r(self):
         raise Exception('Debug this.')
-        if self.linkage.use_manual_params:
-            gamma = self.parent.params.gamma.manual()
-        else:
-            gamma = self.parent.params.gamma()
+        gamma = self.parent.params.gamma()
         gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
         dr = self.parent.parent2.r - self.parent.parent1.r
         u = dr/(dr.pow(2).sum().pow(0.5))
@@ -293,10 +268,7 @@ class OnLinePoint(Point):
     
     @property
     def r(self):
-        if self.linkage.use_manual_params:
-            alpha = self.params.alpha.manual()
-        else:
-            alpha = self.params.alpha()
+        alpha = self.params.alpha()
         return((1-alpha)*self.parent.p1.r+alpha*self.parent.p2.r)
     
     def root(self):

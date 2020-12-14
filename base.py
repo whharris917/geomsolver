@@ -13,7 +13,10 @@ class BaseParameter(torch.nn.Module):
         self.tensor = tensor
         
     def __call__(self):
-        return(self.tensor)
+        if self.parent.linkage.use_manual_params:
+            return(self.manual.tensor)
+        else:
+            return(self.tensor)
     
     def __repr__(self):
         return('{}({}, range={}, units={}, locked={})'.format(
@@ -28,9 +31,9 @@ class BaseParameter(torch.nn.Module):
         if type(_tensor) is not list:
             _tensor = [_tensor]
         if self.locked:
-            self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float) #.view(-1,1)
+            self._tensor = torch.tensor(_tensor, requires_grad=False).to(torch.float)
         else:
-            self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float)) #.view(-1,1)
+            self._tensor = torch.nn.Parameter(torch.tensor(_tensor).to(torch.float))
         
     @property
     def min(self):
