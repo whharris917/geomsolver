@@ -371,6 +371,9 @@ class EnergyPlot():
     def draw_contour_plot(self, show_configs=False):
         if show_configs:
             raise Exception('Debug this.')
+        for param in self.linkage.get_param_dict().values():
+            if param.full_name not in [self.x.full_name, self.y.full_name]:
+                param.reset()
         x0 = self.linkage.get_parameter(self.x.full_name).tensor.tolist()
         y0 = self.linkage.get_parameter(self.y.full_name).tensor.tolist()
         x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
@@ -382,6 +385,9 @@ class EnergyPlot():
         with self.linkage.manual_on():
             self.linkage.set_parameter(self.x.full_name, x0, solve=False, update=True)
             self.linkage.set_parameter(self.y.full_name, y0, solve=False, update=True)
+        for param in self.linkage.get_param_dict().values():
+            if param.full_name not in [self.x.full_name, self.y.full_name]:
+                param.restore()
         X, Y = np.meshgrid(x, y)
         contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
         x = self.x.tensor.item()
