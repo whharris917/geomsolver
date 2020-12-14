@@ -210,71 +210,33 @@ class Linkage():
         self.config_plot.update()
         time.sleep(0.01)
         
-    def show_controller(self, wait=False):
-        
+    def show_controller(self, wait=True):
         linkage = self
-        obj_type_widget = widgets.Dropdown(options=['point', 'line'])
-        obj_name_widget = widgets.Dropdown(options=['a'])
-        param_name_widget = widgets.Dropdown(options=['theta'])    
-        value_widget = widgets.FloatSlider(min=0, max=1, step=0.05, value=0.15)
-
-        def update_obj_name_options(*args):
-            avail_obj_names = []
-            if obj_type_widget.value is 'point':
-                for point in linkage.points.values():
-                    if list(point.params):
-                        avail_obj_names.append(point.name)
-            elif obj_type_widget.value is 'line':
-                for line in linkage.lines.values():
-                    if list(line.params):
-                        avail_obj_names.append(line.name)
-            else:
-                avail_obj_names.append('obj_name')
-            obj_name_widget.options = avail_obj_names
-        obj_type_widget.observe(update_obj_name_options, 'value')
-
-        def update_param_name_options(*args):
-            if obj_type_widget.value is 'point':
-                obj = linkage.points[obj_name_widget.value]
-                param_name_widget.options = obj.params.keys()
-            elif obj_type_widget.value is 'line':
-                obj = linkage.lines[obj_name_widget.value]
-                param_name_widget.options = obj.params.keys()
-            else:
-                param_name_widget.options = ['param_name']
-        obj_name_widget.observe(update_param_name_options, 'value')
-
+        full_param_names = list(self.get_param_dict().keys())
+        if full_param_names:
+            full_param_name_widget = widgets.Dropdown(
+                options=full_param_names, value=full_param_names[0])
+            param = self.get_parameter(full_param_names[0])
+            value_widget = widgets.FloatSlider(
+                min=param.min, max=param.max, step=0.01, value=0.5*(param.min+param.max))
+        else:
+            full_param_name_widget = widgets.Dropdown(options=[], value='') 
+            value_widget = widgets.FloatSlider(min=0, max=1, step=0.01, value=0)
         def update_param_bounds(*args):
-            if param_name_widget.value in ['alpha', 'beta']:
-                _min = 0
-                _max = 1
-                _value = 0.15
-            elif param_name_widget.value in ['theta', 'phi']:
-                _min = 0
-                _max = (2*np.pi)/ANGLE_FACTOR
-                _value = (np.pi/2)/ANGLE_FACTOR
-            else:
-                _min = 0
-                _max = 1
-                _value = 0.5
-            value_widget.min = _min
-            value_widget.max = _max
-            value_widget.value = _value
-        param_name_widget.observe(update_param_bounds, 'value')
-
+            param = self.get_parameter(full_param_name_widget.value)
+            value_widget.min = param.min
+            value_widget.max = param.max
+            value_widget.value = 0.5*(param.min+param.max)
+        full_param_name_widget.observe(update_param_bounds, 'value')
         if wait:
             interact_manual(
-                linkage.set_parameter,
-                obj_type=obj_type_widget,
-                obj_name=obj_name_widget,
-                param_name=param_name_widget,
+                linkage.set_parameter, 
+                full_param_name=full_param_name_widget,
                 value=value_widget)
         else:
             interact(
                 linkage.set_parameter,
-                obj_type=obj_type_widget,
-                obj_name=obj_name_widget,
-                param_name=param_name_widget,
+                full_param_name=full_param_name_widget,
                 value=value_widget)
         
 class LinkagePlot():

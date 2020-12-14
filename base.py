@@ -88,7 +88,7 @@ class BaseGeometry(torch.nn.Module):
             self.params[param_name].tensor = value
         if not self.linkage.use_manual_params:
             self.linkage.config_plot.update()
-        if self.linkage.solve and bool(self.linkage.get_parameter_dict().values()):
+        if self.linkage.solve and bool(self.linkage.get_param_dict().values()):
             self.linkage.update()
         
     def lock(self, param_name=None):
