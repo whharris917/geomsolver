@@ -4,7 +4,7 @@ class Parameter(BaseParameter):
     def __init__(self, tensor, parent, name, range, units, locked=False):
         super(Parameter, self).__init__(tensor, parent, name, range, units, locked)
         self.manual = ManualParameter(tensor, parent, name, range, units, locked)
-        self.backup = ManualParameter(tensor, parent, name, range, units, locked)
+        self.backup = ManualParameter([], parent, name, range, units, locked)
        
     def reset(self):
         self.backup.tensor = self.manual.tensor.tolist()

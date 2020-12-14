@@ -132,7 +132,7 @@ class Linkage():
         else:
             raise Exception('Invalid parameter name.')
         
-    def set_parameter(self, full_param_name, value, solve=True, update=True):
+    def set_parameter(self, full_param_name, value, solve=True):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type in ['Point', 'point']:
             obj = self.points[obj_name]
@@ -140,7 +140,7 @@ class Linkage():
             obj = self.lines[obj_name]
         else:
             raise Exception('Object type must be point or line.')
-        obj.set_parameter(param_name, value, solve, update)
+        obj.set_parameter(param_name, value, solve)
        
     def get_param_dict(self, get_torch_params=False):
         parameters = {}
@@ -371,20 +371,21 @@ class EnergyPlot():
     def draw_contour_plot(self, show_configs=False):
         if show_configs:
             raise Exception('Debug this.')
+        with self.linkage.manual_on():
+            x0 = self.linkage.get_parameter(self.x.full_name)().tolist()
+            y0 = self.linkage.get_parameter(self.y.full_name)().tolist()
         for param in self.linkage.get_param_dict().values():
             if param.full_name not in [self.x.full_name, self.y.full_name]:
                 param.reset()
-        x0 = self.linkage.get_parameter(self.x.full_name).tensor.tolist()
-        y0 = self.linkage.get_parameter(self.y.full_name).tensor.tolist()
         x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
         y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
         with self.linkage.manual_on():
-            self.linkage.set_parameter(self.x.full_name, x.tolist(), solve=False, update=False)
-            self.linkage.set_parameter(self.y.full_name, y.tolist(), solve=False, update=False)
+            self.linkage.set_parameter(self.x.full_name, x.tolist(), solve=False)
+            self.linkage.set_parameter(self.y.full_name, y.tolist(), solve=False)
         E = self.linkage._energy().squeeze().tolist()
         with self.linkage.manual_on():
-            self.linkage.set_parameter(self.x.full_name, x0, solve=False, update=True)
-            self.linkage.set_parameter(self.y.full_name, y0, solve=False, update=True)
+            self.linkage.set_parameter(self.x.full_name, x0, solve=False)
+            self.linkage.set_parameter(self.y.full_name, y0, solve=False)
         for param in self.linkage.get_param_dict().values():
             if param.full_name not in [self.x.full_name, self.y.full_name]:
                 param.restore()
