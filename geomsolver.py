@@ -6,11 +6,13 @@ from munch import Munch
 from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
 from line import FromPointLine, FromPointsLine, OnPointLine, OnPointsLine
 from ipywidgets import interact, interactive, fixed, interact_manual
+from ipywidgets import Button, Layout, jslink, IntText, IntSlider, GridspecLayout
+import ipywidgets as widgets
+from IPython.display import display
 import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from settings import *
 from param import Parameter
-from IPython.display import display
 
 class Linkage():
     def __init__(self):       
@@ -26,36 +28,46 @@ class Linkage():
                 for t in itertools.product(letters, repeat=n):
                     self.names[_type].append(''.join(t))
             self.names[_type] = iter(self.names[_type][1:])
+        self.grid = None
         self.config_plot = None
         self.energy_plot = None
         self.tolerance = TOLERANCE
         self.use_manual_params = False
         self.solve  = True
         self.fig_size = FIGSIZE
-        self.show()
+        self.create_plots()
+        self.create_grid()
+        self.create_controllers()
         
     ################################# Plots and Controllers ################################
 
-    def show(self):
+    def create_grid(self):
+        self.grid = GridspecLayout(5, 10, height='200px', width='850px')
+        self.grid[:-1,:5] = widgets.Output()
+        self.grid[:-1,5:] = widgets.Output()
+        self.grid[-1,:] = self.create_refresh_button()
+        display(self.grid)
+    
+    def create_plots(self):
         self.fig = plt.figure(figsize=(2*self.fig_size,self.fig_size))
-        self.show_configuration(show_origin=False)
-        self.show_energy_plot()
-        self.show_refresh_button()
-    
-    def show_configuration(self, show_origin=True):
-        self.config_plot = LinkagePlot(self, show_origin)
-        self.show_controller()
-    
-    def show_energy_plot(self):
+        self.config_plot = LinkagePlot(self, show_origin=False)
         self.energy_plot = EnergyPlot(self)
-        self.energy_plot.show_controller()
         
-    def refresh_plots(self):
-        print('Refreshing plots.')
+    def create_controllers(self):
+        with self.grid[0,0]:
+            self.show_controller()
+        with self.grid[0,-1]:
+            self.energy_plot.show_controller()
+        
+    def refresh_plots(self, button):
+        self.full_param_name_widget.options = list(self.get_param_dict().keys())
     
-    def show_refresh_button(self):
-        refresh_button = widgets.Button(description='Refresh', layout={'width': '300px'})
+    def create_refresh_button(self):
+        refresh_button = widgets.Button(
+            description='Refresh', button_style='success',
+            layout=Layout(height='auto', width='auto'))            
         refresh_button.on_click(self.refresh_plots)
+        return(refresh_button)
     
     ######################################## Points ########################################
     
@@ -232,30 +244,29 @@ class Linkage():
         linkage = self
         full_param_names = list(self.get_param_dict().keys())
         if full_param_names:
-            full_param_name_widget = widgets.Dropdown(
+            self.full_param_name_widget = widgets.Dropdown(
                 options=full_param_names, value=full_param_names[0])
             param = self.get_parameter(full_param_names[0])
             value_widget = widgets.FloatSlider(
                 min=param.min, max=param.max, step=0.1, value=param.tensor.item())
         else:
-            full_param_name_widget = widgets.Dropdown(options=[''], value='') 
+            self.full_param_name_widget = widgets.Dropdown(options=[''], value='') 
             value_widget = widgets.FloatSlider(min=0, max=1, step=0.1, value=0)
         def update_param_bounds(*args):
-            param = self.get_parameter(full_param_name_widget.value)
+            param = self.get_parameter(self.full_param_name_widget.value)
             value_widget.min = param.min
             value_widget.max = param.max
-            print(param.tensor.item())
             value_widget.value = param.tensor.item()
-        full_param_name_widget.observe(update_param_bounds, 'value')
+        self.full_param_name_widget.observe(update_param_bounds, 'value')
         if wait:
             interact_manual(
                 linkage.set_parameter, 
-                full_param_name=full_param_name_widget,
+                full_param_name=self.full_param_name_widget,
                 value=value_widget)
         else:
             interact(
                 linkage.set_parameter,
-                full_param_name=full_param_name_widget,
+                full_param_name=self.full_param_name_widget,
                 value=value_widget)
         
 class LinkagePlot():
@@ -279,7 +290,7 @@ class LinkagePlot():
                 marker='+', s=50, c='black', alpha=1, label='origin')
         #time_template = ' t={:.0f}\n E={:.2f}\n T={:.5f}\n theta={:.0f}\n'
         #self.time_text = self.ax.text(0.05, 0.7, '', transform=self.ax.transAxes)
-        self.linkage.fig.canvas.draw()
+        #self.linkage.fig.canvas.draw()
     
     def update(self):
         with self.linkage.manual_off():
@@ -320,7 +331,7 @@ class LinkagePlot():
                     self.points[p.name].set_offsets(
                         [[p.r[0],p.r[1]]])
         #self.time_text.set_text('')
-        self.linkage.fig.canvas.draw()
+        #self.linkage.fig.canvas.draw()
         
 class EnergyPlot():
     def __init__(self, linkage):
