@@ -10,6 +10,7 @@ import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from settings import *
 from param import Parameter
+from IPython.display import display
 
 class Linkage():
     def __init__(self):       
@@ -30,14 +31,31 @@ class Linkage():
         self.tolerance = TOLERANCE
         self.use_manual_params = False
         self.solve  = True
+        self.fig_size = FIGSIZE
+        self.show()
         
-    ######################################## Plots #########################################
+    ################################# Plots and Controllers ################################
 
+    def show(self):
+        self.fig = plt.figure(figsize=(2*self.fig_size,self.fig_size))
+        self.show_configuration(show_origin=False)
+        self.show_energy_plot()
+        self.show_refresh_button()
+    
     def show_configuration(self, show_origin=True):
         self.config_plot = LinkagePlot(self, show_origin)
+        self.show_controller()
     
     def show_energy_plot(self):
         self.energy_plot = EnergyPlot(self)
+        self.energy_plot.show_controller()
+        
+    def refresh_plots(self):
+        print('Refreshing plots.')
+    
+    def show_refresh_button(self):
+        refresh_button = widgets.Button(description='Refresh', layout={'width': '300px'})
+        refresh_button.on_click(self.refresh_plots)
     
     ######################################## Points ########################################
     
@@ -218,15 +236,16 @@ class Linkage():
                 options=full_param_names, value=full_param_names[0])
             param = self.get_parameter(full_param_names[0])
             value_widget = widgets.FloatSlider(
-                min=param.min, max=param.max, step=0.01, value=0.5*(param.min+param.max))
+                min=param.min, max=param.max, step=0.1, value=param.tensor.item())
         else:
-            full_param_name_widget = widgets.Dropdown(options=[], value='') 
-            value_widget = widgets.FloatSlider(min=0, max=1, step=0.01, value=0)
+            full_param_name_widget = widgets.Dropdown(options=[''], value='') 
+            value_widget = widgets.FloatSlider(min=0, max=1, step=0.1, value=0)
         def update_param_bounds(*args):
             param = self.get_parameter(full_param_name_widget.value)
             value_widget.min = param.min
             value_widget.max = param.max
-            value_widget.value = 0.5*(param.min+param.max)
+            print(param.tensor.item())
+            value_widget.value = param.tensor.item()
         full_param_name_widget.observe(update_param_bounds, 'value')
         if wait:
             interact_manual(
@@ -244,14 +263,13 @@ class LinkagePlot():
         self.linkage = linkage
         self.show_origin = show_origin
         self.origin = torch.tensor([0,0,0])
-        self.fig_size = FIGSIZE
         self.fig_lim = FIGLIM
         self.build_plot()
         self.points, self.anchors, self.lines = {}, {}, {}
         
     def build_plot(self):
-        self.fig = plt.figure(figsize=(self.fig_size,self.fig_size))
-        self.ax = self.fig.add_subplot(111, autoscale_on=False,
+        #self.fig = plt.figure(figsize=(self.fig_size,self.fig_size))
+        self.ax = self.linkage.fig.add_subplot(121, autoscale_on=False,
             xlim=(-self.fig_lim,self.fig_lim),
             ylim=(-self.fig_lim,self.fig_lim))
         self.ax.set_title('Configuration')
@@ -261,7 +279,7 @@ class LinkagePlot():
                 marker='+', s=50, c='black', alpha=1, label='origin')
         #time_template = ' t={:.0f}\n E={:.2f}\n T={:.5f}\n theta={:.0f}\n'
         #self.time_text = self.ax.text(0.05, 0.7, '', transform=self.ax.transAxes)
-        self.fig.canvas.draw()
+        self.linkage.fig.canvas.draw()
     
     def update(self):
         with self.linkage.manual_off():
@@ -302,13 +320,13 @@ class LinkagePlot():
                     self.points[p.name].set_offsets(
                         [[p.r[0],p.r[1]]])
         #self.time_text.set_text('')
-        self.fig.canvas.draw()
+        self.linkage.fig.canvas.draw()
         
 class EnergyPlot():
     def __init__(self, linkage):
         self.linkage = linkage
-        self.fig_size = FIGSIZE
-        self.fig_lim = FIGLIM
+        #self.fig_size = FIGSIZE
+        #self.fig_lim = FIGLIM
         self.num_param_steps = NUM_PARAM_STEPS
         self.num_contour_levels = NUM_CONTOUR_LEVELS
         self.cmap = CMAP
@@ -317,12 +335,12 @@ class EnergyPlot():
         self.build_plot()
         
     def build_plot(self):
-        self.fig = plt.figure(figsize=(self.fig_size,self.fig_size))
-        self.ax = self.fig.add_subplot(111, autoscale_on=False,
+        #self.fig = plt.figure(figsize=(self.fig_size,self.fig_size))
+        self.ax = self.linkage.fig.add_subplot(122, autoscale_on=False,
             xlim=(0,1),
             ylim=(0,1))
         self.ax.set_title('Energy')
-        self.fig.canvas.draw()
+        self.linkage.fig.canvas.draw()
         
     def show_controller(self, wait=True, show_configs=False):
         param_names = self.linkage.get_param_dict().keys()
@@ -337,7 +355,7 @@ class EnergyPlot():
         self.x = self.linkage.get_parameter(x_name)
         self.y = self.linkage.get_parameter(y_name)
         self.draw_axes()
-        self.draw_contour_plot(show_configs)
+        self.draw_plot(show_configs)
         
     def draw_axes(self):
         self.ax.set_xlim([self.x.min,self.x.max])
@@ -345,7 +363,7 @@ class EnergyPlot():
         self.ax.set_xlabel('{} ({})'.format(self.x.full_name, self.x.units))
         self.ax.set_ylabel('{} ({})'.format(self.y.full_name, self.y.units))
     
-    def draw_contour_plot(self, show_configs=False):
+    def draw_plot(self, show_configs=False):
         if show_configs:
             raise Exception('Debug this.')
         with self.linkage.solve_off():
@@ -368,9 +386,11 @@ class EnergyPlot():
                 if param.full_name not in [self.x.full_name, self.y.full_name]:
                     param.restore()
             X, Y = np.meshgrid(x, y)
-            contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
+            #contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
+            im = self.ax.imshow(E, interpolation='nearest', cmap=self.cmap, origin='lower',
+                extent=[self.x.min, self.x.max, self.y.min, self.y.max], aspect='auto')
             x = self.x.tensor.item()
             y = self.y.tensor.item()
             self.ax.scatter(x=[x], y=[y], c='white', s=25)
             #self.fig.colorbar(contourmap)
-            self.fig.canvas.draw()
+            self.linkage.fig.canvas.draw()
