@@ -189,6 +189,9 @@ class Linkage():
         else:
             raise Exception('Object type must be point or line.')
         obj.set_parameter(param_name, value)
+        x = self.get_parameter(self.energy_plot.x_widget.value).tensor.item()
+        y = self.get_parameter(self.energy_plot.y_widget.value).tensor.item()
+        self.energy_plot.status_point.set_offsets([[x,y]])
        
     def get_param_dict(self, get_torch_params=False):
         parameters = {}
