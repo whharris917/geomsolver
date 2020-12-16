@@ -6,5 +6,6 @@ TOLERANCE = 0.001
 N_UPDATE = 100
 ANGLE_FACTOR = 1
 NUM_PARAM_STEPS = 100 #1000
+STEP_SIZE = 0.1
 NUM_CONTOUR_LEVELS = 100
 CMAP = 'coolwarm' #gnuplot #gist_stern #coolwarm

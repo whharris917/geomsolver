@@ -32,8 +32,10 @@ class Linkage():
         self.config_plot = None
         self.energy_plot = None
         self.tolerance = TOLERANCE
+        self.step_size = STEP_SIZE
         self.use_manual_params = False
         self.solve  = True
+        self.wait = True
         self.fig_size = FIGSIZE
         self.create_plots()
         #self.show_controllers(wait=True)
@@ -53,17 +55,18 @@ class Linkage():
         display(self.grid)
         
     def show_controllers(self, create_grid=True, wait=True):
+        self.wait = wait
         if create_grid:
             self.create_grid()
         with self.grid[0,0]:
-            self.show_controller(wait)
+            self.show_controller(self.wait)
         with self.grid[0,-1]:
-            self.energy_plot.show_controller(wait)
+            self.energy_plot.show_controller(self.wait)
         
     def refresh_plots(self, button):
         self.grid[:-1,:5].clear_output()
         self.grid[:-1,5:].clear_output()
-        self.show_controllers(create_grid=False)
+        self.show_controllers(create_grid=False, wait=self.wait)
     
     def create_refresh_button(self):
         refresh_button = widgets.Button(
@@ -190,6 +193,11 @@ class Linkage():
             raise Exception('Object type must be point or line.')
         obj.set_parameter(param_name, value)
         self.energy_plot.update_status_point()
+        if not self.use_manual_params:
+            if self.energy_plot.x_widget is not None:
+                self.energy_plot.update(
+                    x_name=self.energy_plot.x_widget.value,
+                    y_name=self.energy_plot.y_widget.value)
        
     def get_param_dict(self, get_torch_params=False):
         parameters = {}
@@ -260,10 +268,10 @@ class Linkage():
                 options=param_names, value=param_names[0])
             param = self.get_parameter(param_names[0])
             self.value_widget = widgets.FloatSlider(
-                min=param.min, max=param.max, step=0.01, value=param.tensor.item())
+                min=param.min, max=param.max, step=self.step_size, value=param.tensor.item())
         else:
             self.param_name_widget = widgets.Dropdown(options=[''], value='') 
-            self.value_widget = widgets.FloatSlider(min=0, max=1, step=0.01, value=0)
+            self.value_widget = widgets.FloatSlider(min=0, max=1, step=self.step_size, value=0)
         self.param_name_widget.observe(self.update_param_bounds, 'value')
         if wait:
             interact_manual(
@@ -351,6 +359,8 @@ class EnergyPlot():
         self.x = None
         self.y = None
         self.build_plot()
+        self.x_widget = None
+        self.y_widget = None
         
     def build_plot(self):
         #self.fig = plt.figure(figsize=(self.fig_size,self.fig_size))
@@ -405,7 +415,7 @@ class EnergyPlot():
         self.y = self.linkage.get_parameter(y_name)
         self.draw_axes()
         self.draw_plot()
-        
+     
     def update_status_point(self):
         try:
             x = self.linkage.get_parameter(self.x_widget.value).tensor.item()
