@@ -189,9 +189,7 @@ class Linkage():
         else:
             raise Exception('Object type must be point or line.')
         obj.set_parameter(param_name, value)
-        x = self.get_parameter(self.energy_plot.x_widget.value).tensor.item()
-        y = self.get_parameter(self.energy_plot.y_widget.value).tensor.item()
-        self.energy_plot.status_point.set_offsets([[x,y]])
+        self.energy_plot.update_status_point()
        
     def get_param_dict(self, get_torch_params=False):
         parameters = {}
@@ -246,6 +244,14 @@ class Linkage():
         self.config_plot.update()
         time.sleep(0.01)
         
+    def update_param_bounds(self, *args):
+        param = self.get_parameter(self.param_name_widget.value)
+        value = copy.deepcopy(param.tensor.item())
+        self.value_widget.min = param.min
+        self.value_widget.value = param.min
+        self.value_widget.max = param.max
+        self.value_widget.value = value
+        
     def show_controller(self, wait=True):
         linkage = self
         param_names = list(self.get_param_dict().keys())
@@ -253,27 +259,22 @@ class Linkage():
             self.param_name_widget = widgets.Dropdown(
                 options=param_names, value=param_names[0])
             param = self.get_parameter(param_names[0])
-            value_widget = widgets.FloatSlider(
-                min=param.min, max=param.max, step=0.1, value=param.tensor.item())
+            self.value_widget = widgets.FloatSlider(
+                min=param.min, max=param.max, step=0.01, value=param.tensor.item())
         else:
             self.param_name_widget = widgets.Dropdown(options=[''], value='') 
-            value_widget = widgets.FloatSlider(min=0, max=1, step=0.1, value=0)
-        def update_param_bounds(*args):
-            param = self.get_parameter(self.param_name_widget.value)
-            value_widget.min = param.min
-            value_widget.max = param.max
-            value_widget.value = param.tensor.item()
-        self.param_name_widget.observe(update_param_bounds, 'value')
+            self.value_widget = widgets.FloatSlider(min=0, max=1, step=0.01, value=0)
+        self.param_name_widget.observe(self.update_param_bounds, 'value')
         if wait:
             interact_manual(
-                linkage.set_parameter, 
+                linkage.set_parameter,
                 full_param_name=self.param_name_widget,
-                value=value_widget)
+                value=self.value_widget)
         else:
             interact(
                 linkage.set_parameter,
                 full_param_name=self.param_name_widget,
-                value=value_widget)
+                value=self.value_widget)
         
 class LinkagePlot():
     def __init__(self, linkage, show_origin=True):
@@ -404,6 +405,14 @@ class EnergyPlot():
         self.y = self.linkage.get_parameter(y_name)
         self.draw_axes()
         self.draw_plot()
+        
+    def update_status_point(self):
+        try:
+            x = self.linkage.get_parameter(self.x_widget.value).tensor.item()
+            y = self.linkage.get_parameter(self.y_widget.value).tensor.item()
+            self.status_point.set_offsets([[x,y]])
+        except:
+            pass
         
     def draw_axes(self):
         self.ax.set_xlim([self.x.min,self.x.max])
