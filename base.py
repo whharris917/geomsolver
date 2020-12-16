@@ -66,7 +66,6 @@ class BaseGeometry(torch.nn.Module):
         self.linkage = linkage
         self.name = name
         self.params = Munch({})
-        self._params = Munch({})
     
     def __repr__(self):
         raise Exception('Override this method.')
@@ -95,10 +94,8 @@ class BaseGeometry(torch.nn.Module):
         param_names = self.params.keys() if param_name is None else [param_name]
         for param_name in param_names:
             self.params[param_name].lock()
-            self._params[param_name].lock()
             
     def unlock(self, param_name=None):
         param_names = self.params.keys() if param_name is None else [param_name]
         for param_name in param_names:
             self.params[param_name].unlock()
-            self._params[param_name].unlock()

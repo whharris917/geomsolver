@@ -462,7 +462,7 @@ class EnergyPlot():
         with self.linkage.solve_off():
             E = self.linkage.get_full_energy()
             x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
-            y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
+            y = np.linspace(self.y.min, self.y.max, self.num_param_steps)
             def find_nearest(array, value):
                 idx = np.searchsorted(array, value, side='left')
                 if idx > 0 and (idx == len(array) or math.fabs(
