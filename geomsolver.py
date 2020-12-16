@@ -461,28 +461,8 @@ class EnergyPlot():
     def draw_plot(self):
         with self.linkage.solve_off():
             E = self.linkage.get_full_energy()
-            '''
-            with self.linkage.manual_on():
-                x0 = self.linkage.get_parameter(self.x.full_name)().tolist()
-                y0 = self.linkage.get_parameter(self.y.full_name)().tolist()
-            for param in self.linkage.get_param_dict().values():
-                if param.full_name not in [self.x.full_name, self.y.full_name]:
-                    param.reset()
-            '''
             x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
             y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
-            '''
-            with self.linkage.manual_on():
-                self.linkage.set_parameter(self.x.full_name, x.tolist())
-                self.linkage.set_parameter(self.y.full_name, y.tolist())
-            E = self.linkage._energy().squeeze().tolist()
-            with self.linkage.manual_on():
-                self.linkage.set_parameter(self.x.full_name, x0)
-                self.linkage.set_parameter(self.y.full_name, y0)
-            for param in self.linkage.get_param_dict().values():
-                if param.full_name not in [self.x.full_name, self.y.full_name]:
-                    param.restore()
-            '''
             def find_nearest(array, value):
                 idx = np.searchsorted(array, value, side='left')
                 if idx > 0 and (idx == len(array) or math.fabs(
