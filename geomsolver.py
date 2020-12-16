@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import optimize
-import torch, itertools, string, time, copy
+import torch, itertools, string, time, copy, math
 from contextlib import contextmanager
 from munch import Munch
 from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
@@ -39,6 +39,8 @@ class Linkage():
         self.fig_size = FIGSIZE
         self.num_param_steps = NUM_PARAM_STEPS
         self.create_plots()
+        self.full_energy = None
+        self.energy_updated = False
         #self.show_controllers(wait=True)
         
     ################################# Plots and Controllers ################################
@@ -82,30 +84,35 @@ class Linkage():
         name = next(self.names['point'])
         self.points[name] = AtPoint(self, name, at)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.points[name])
     
     def add_anchorpoint(self, at):
         name = next(self.names['point'])
         self.points[name] = AnchorPoint(self, name, at)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.points[name])
     
     def add_onpointpoint(self, parent):
         name = next(self.names['point'])
         self.points[name] = OnPointPoint(self, name, parent)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.points[name])
     
     def add_topointpoint(self, at, parent):
         name = next(self.names['point'])
         self.points[name] = ToPointPoint(self, name, at, parent)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.points[name])
     
     def add_onlinepoint(self, parent, alpha=None):
         name = next(self.names['point'])
         self.points[name] = OnLinePoint(self, name, parent, alpha)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.points[name])
     
     ######################################## Lines #########################################
@@ -114,24 +121,28 @@ class Linkage():
         name = next(self.names['line'])
         self.lines[name] = FromPointLine(self, name, parent, L, theta, phi, ux, uz, locked)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.lines[name])
     
     def add_frompointsline(self, parent1, parent2):
         name = next(self.names['line'])
         self.lines[name] = FromPointsLine(self, name, parent1, parent2)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.lines[name])
     
     def add_onpointline(self, parent, L, theta, phi=None, ux=None, uz=None, beta=None):
         name = next(self.names['line'])
         self.lines[name] = OnPointLine(self, name, parent, L, theta, phi, ux, uz, beta)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.lines[name])
         
     def add_onpointsline(self, parent1, parent2, L, gamma=None):
         name = next(self.names['line'])
         self.lines[name] = OnPointsLine(self, name, parent1, parent2, L, gamma)
         self.config_plot.update()
+        self.energy_updated = False
         return(self.lines[name]) 
         
     ########################################################################################
@@ -235,7 +246,9 @@ class Linkage():
         with self.manual_on():
             return(self.energy())
         
-    def full_energy(self):
+    def get_full_energy(self):
+        if self.energy_updated:
+            return(self.full_energy)
         with self.manual_on():
             x0 = {}
             for x in self.get_param_dict().values():
@@ -245,7 +258,9 @@ class Linkage():
             E = self._energy()
             for x in self.get_param_dict().values():
                 self.set_parameter(x.full_name, x0[x.full_name])
-        return(E)
+        self.full_energy = E
+        self.energy_updated = True
+        return(self.full_energy)
         
     def update(self, max_num_epochs=10000):
         optimizer = torch.optim.SGD(self.get_torch_param_dict().values(), lr=LEARNING_RATE)
@@ -445,14 +460,18 @@ class EnergyPlot():
     
     def draw_plot(self):
         with self.linkage.solve_off():
+            E = self.linkage.get_full_energy()
+            '''
             with self.linkage.manual_on():
                 x0 = self.linkage.get_parameter(self.x.full_name)().tolist()
                 y0 = self.linkage.get_parameter(self.y.full_name)().tolist()
             for param in self.linkage.get_param_dict().values():
                 if param.full_name not in [self.x.full_name, self.y.full_name]:
                     param.reset()
+            '''
             x = np.linspace(self.x.min, self.x.max, self.num_param_steps)
             y = np.linspace(self.y.min, self.y.max, self.num_param_steps) 
+            '''
             with self.linkage.manual_on():
                 self.linkage.set_parameter(self.x.full_name, x.tolist())
                 self.linkage.set_parameter(self.y.full_name, y.tolist())
@@ -463,13 +482,34 @@ class EnergyPlot():
             for param in self.linkage.get_param_dict().values():
                 if param.full_name not in [self.x.full_name, self.y.full_name]:
                     param.restore()
+            '''
+            def find_nearest(array, value):
+                idx = np.searchsorted(array, value, side='left')
+                if idx > 0 and (idx == len(array) or math.fabs(
+                    value - array[idx-1]) < math.fabs(value - array[idx])):
+                    return(idx-1)
+                else:
+                    return(idx)
+            z_index = {}
+            for d, param in enumerate(self.linkage.get_param_dict().values()):
+                if param.full_name not in [self.x.full_name, self.y.full_name]:
+                    z_index[d] = find_nearest(
+                        np.linspace(param.min, param.max, self.num_param_steps),
+                        param().item())
+                else:
+                    z_index[d] = None
+            E = E.detach().numpy()
+            for d in list(range(len(z_index)))[::-1]:
+                if z_index[d] is None:
+                    continue
+                E = np.take(E, [z_index[d]], axis=d)
+            E = E.squeeze().tolist()
             X, Y = np.meshgrid(x, y)
             #contourmap = self.ax.contourf(X, Y, E, levels=self.num_contour_levels, cmap=self.cmap)
             im = self.ax.imshow(E, interpolation='nearest', cmap=self.cmap, origin='lower',
                 extent=[self.x.min, self.x.max, self.y.min, self.y.max], aspect='auto')
             x = self.x.tensor.item()
             y = self.y.tensor.item()
-            #self.ax.scatter(x=[x], y=[y], c='white', s=25)
             self.status_point.set_offsets([[x,y]])
             #self.fig.colorbar(contourmap)
             self.linkage.fig.canvas.draw()

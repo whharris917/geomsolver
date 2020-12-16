@@ -84,6 +84,7 @@ class FromPointsLine(Line):
         self.target_length = L
         if self.linkage.solve:
             self.linkage.update()
+        self.linkage.energy_updated = False
         
     def E(self):
         if self.is_length_constrained() and self.target_length is not None:
