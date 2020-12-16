@@ -36,31 +36,34 @@ class Linkage():
         self.solve  = True
         self.fig_size = FIGSIZE
         self.create_plots()
-        self.create_grid()
-        self.create_controllers()
+        self.show_controllers()
         
     ################################# Plots and Controllers ################################
-
-    def create_grid(self):
-        self.grid = GridspecLayout(5, 10, height='200px', width='850px')
-        self.grid[:-1,:5] = widgets.Output()
-        self.grid[:-1,5:] = widgets.Output()
-        self.grid[-1,:] = self.create_refresh_button()
-        display(self.grid)
     
     def create_plots(self):
         self.fig = plt.figure(figsize=(2*self.fig_size,self.fig_size))
         self.config_plot = LinkagePlot(self, show_origin=False)
         self.energy_plot = EnergyPlot(self)
         
-    def create_controllers(self):
+    def create_grid(self):
+        self.grid = GridspecLayout(5, 10, height='200px', width='850px')
+        self.grid[:-1,:5] = widgets.Output()
+        self.grid[:-1,5:] = widgets.Output()
+        self.grid[-1,:] = self.create_refresh_button()
+        display(self.grid)
+        
+    def show_controllers(self, create_grid=True):
+        if create_grid:
+            self.create_grid()
         with self.grid[0,0]:
             self.show_controller()
         with self.grid[0,-1]:
             self.energy_plot.show_controller()
         
     def refresh_plots(self, button):
-        self.full_param_name_widget.options = list(self.get_param_dict().keys())
+        self.grid[:-1,:5].clear_output()
+        self.grid[:-1,5:].clear_output()
+        self.show_controllers(create_grid=False)
     
     def create_refresh_button(self):
         refresh_button = widgets.Button(
@@ -242,31 +245,31 @@ class Linkage():
         
     def show_controller(self, wait=True):
         linkage = self
-        full_param_names = list(self.get_param_dict().keys())
-        if full_param_names:
-            self.full_param_name_widget = widgets.Dropdown(
-                options=full_param_names, value=full_param_names[0])
-            param = self.get_parameter(full_param_names[0])
+        param_names = list(self.get_param_dict().keys())
+        if param_names:
+            self.param_name_widget = widgets.Dropdown(
+                options=param_names, value=param_names[0])
+            param = self.get_parameter(param_names[0])
             value_widget = widgets.FloatSlider(
                 min=param.min, max=param.max, step=0.1, value=param.tensor.item())
         else:
-            self.full_param_name_widget = widgets.Dropdown(options=[''], value='') 
+            self.param_name_widget = widgets.Dropdown(options=[''], value='') 
             value_widget = widgets.FloatSlider(min=0, max=1, step=0.1, value=0)
         def update_param_bounds(*args):
-            param = self.get_parameter(self.full_param_name_widget.value)
+            param = self.get_parameter(self.param_name_widget.value)
             value_widget.min = param.min
             value_widget.max = param.max
             value_widget.value = param.tensor.item()
-        self.full_param_name_widget.observe(update_param_bounds, 'value')
+        self.param_name_widget.observe(update_param_bounds, 'value')
         if wait:
             interact_manual(
                 linkage.set_parameter, 
-                full_param_name=self.full_param_name_widget,
+                full_param_name=self.param_name_widget,
                 value=value_widget)
         else:
             interact(
                 linkage.set_parameter,
-                full_param_name=self.full_param_name_widget,
+                full_param_name=self.param_name_widget,
                 value=value_widget)
         
 class LinkagePlot():
@@ -353,14 +356,44 @@ class EnergyPlot():
         self.ax.set_title('Energy')
         self.linkage.fig.canvas.draw()
         
+    def on_change_x(self, *args):
+        current_y = copy.deepcopy(self.y_widget.value)
+        param_names = list(self.linkage.get_param_dict().keys())
+        if self.x_widget.value in param_names:
+            param_names.remove(self.x_widget.value)
+        if current_y != self.x_widget.value:
+            param_names.remove(current_y)
+            param_names = [current_y] + param_names
+        self.y_widget.options = param_names
+        
+    def on_change_y(self, *args):
+        current_x = copy.deepcopy(self.x_widget.value)
+        param_names = list(self.linkage.get_param_dict().keys())
+        if self.y_widget.value in param_names:
+            param_names.remove(self.y_widget.value)
+        if current_x != self.y_widget.value:
+            param_names.remove(current_x)
+            param_names = [current_x] + param_names
+        self.x_widget.options = param_names
+        
     def show_controller(self, wait=True, show_configs=False):
-        param_names = self.linkage.get_param_dict().keys()
-        x_widget = widgets.Dropdown(options=param_names)
-        y_widget = widgets.Dropdown(options=param_names)
+        param_names = list(self.linkage.get_param_dict().keys())
+        self.x_widget = widgets.Dropdown(options=param_names)
+        if self.x_widget.value in param_names:
+            param_names.remove(self.x_widget.value)
+        self.y_widget = widgets.Dropdown(options=param_names)
+        if self.y_widget.value in param_names:
+            param_names = list(self.linkage.get_param_dict().keys())
+            param_names.remove(self.y_widget.value)
+        self.x_widget.options = param_names
+        self.x_widget.observe(self.on_change_x, 'value')
+        self.y_widget.observe(self.on_change_y, 'value')
         if wait:
-            interact_manual(self.update, x_name=x_widget, y_name=y_widget, show_configs=show_configs)
+            interact_manual(self.update,
+                x_name=self.x_widget, y_name=self.y_widget, show_configs=show_configs)
         else:
-            interact(self.update, x_name=x_widget, y_name=y_widget, show_configs=show_configs)
+            interact(self.update,
+                x_name=self.x_widget, y_name=self.y_widget, show_configs=show_configs)
     
     def update(self, x_name, y_name, show_configs=False):
         self.x = self.linkage.get_parameter(x_name)
