@@ -37,6 +37,7 @@ class Linkage():
         self.solve  = True
         self.wait = True
         self.fig_size = FIGSIZE
+        self.num_param_steps = NUM_PARAM_STEPS
         self.create_plots()
         #self.show_controllers(wait=True)
         
@@ -48,7 +49,7 @@ class Linkage():
         self.energy_plot = EnergyPlot(self)
         
     def create_grid(self):
-        self.grid = GridspecLayout(5, 10, height='200px', width='850px')
+        self.grid = GridspecLayout(5, 10, height='150px', width='850px')
         self.grid[:-1,:5] = widgets.Output()
         self.grid[:-1,5:] = widgets.Output()
         self.grid[-1,:] = self.create_refresh_button()
@@ -233,6 +234,18 @@ class Linkage():
     def _energy(self):
         with self.manual_on():
             return(self.energy())
+        
+    def full_energy(self):
+        with self.manual_on():
+            x0 = {}
+            for x in self.get_param_dict().values():
+                x0[x.full_name] = x().tolist()
+                v = np.linspace(x.min, x.max, self.num_param_steps)
+                self.set_parameter(x.full_name, v.tolist())
+            E = self._energy()
+            for x in self.get_param_dict().values():
+                self.set_parameter(x.full_name, x0[x.full_name])
+        return(E)
         
     def update(self, max_num_epochs=10000):
         optimizer = torch.optim.SGD(self.get_torch_param_dict().values(), lr=LEARNING_RATE)
