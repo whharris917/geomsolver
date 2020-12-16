@@ -36,7 +36,7 @@ class Linkage():
         self.solve  = True
         self.fig_size = FIGSIZE
         self.create_plots()
-        self.show_controllers()
+        #self.show_controllers(wait=True)
         
     ################################# Plots and Controllers ################################
     
@@ -52,13 +52,13 @@ class Linkage():
         self.grid[-1,:] = self.create_refresh_button()
         display(self.grid)
         
-    def show_controllers(self, create_grid=True):
+    def show_controllers(self, create_grid=True, wait=True):
         if create_grid:
             self.create_grid()
         with self.grid[0,0]:
-            self.show_controller()
+            self.show_controller(wait)
         with self.grid[0,-1]:
-            self.energy_plot.show_controller()
+            self.energy_plot.show_controller(wait)
         
     def refresh_plots(self, button):
         self.grid[:-1,:5].clear_output()
@@ -354,6 +354,7 @@ class EnergyPlot():
             xlim=(0,1),
             ylim=(0,1))
         self.ax.set_title('Energy')
+        self.status_point = self.ax.scatter([], [], s=25, c='white')
         self.linkage.fig.canvas.draw()
         
     def on_change_x(self, *args):
@@ -433,6 +434,7 @@ class EnergyPlot():
                 extent=[self.x.min, self.x.max, self.y.min, self.y.max], aspect='auto')
             x = self.x.tensor.item()
             y = self.y.tensor.item()
-            self.ax.scatter(x=[x], y=[y], c='white', s=25)
+            #self.ax.scatter(x=[x], y=[y], c='white', s=25)
+            self.status_point.set_offsets([[x,y]])
             #self.fig.colorbar(contourmap)
             self.linkage.fig.canvas.draw()
