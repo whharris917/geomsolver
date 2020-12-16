@@ -376,7 +376,7 @@ class EnergyPlot():
             param_names = [current_x] + param_names
         self.x_widget.options = param_names
         
-    def show_controller(self, wait=True, show_configs=False):
+    def show_controller(self, wait=True):
         param_names = list(self.linkage.get_param_dict().keys())
         self.x_widget = widgets.Dropdown(options=param_names)
         if self.x_widget.value in param_names:
@@ -390,16 +390,16 @@ class EnergyPlot():
         self.y_widget.observe(self.on_change_y, 'value')
         if wait:
             interact_manual(self.update,
-                x_name=self.x_widget, y_name=self.y_widget, show_configs=show_configs)
+                x_name=self.x_widget, y_name=self.y_widget)
         else:
             interact(self.update,
-                x_name=self.x_widget, y_name=self.y_widget, show_configs=show_configs)
+                x_name=self.x_widget, y_name=self.y_widget)
     
-    def update(self, x_name, y_name, show_configs=False):
+    def update(self, x_name, y_name):
         self.x = self.linkage.get_parameter(x_name)
         self.y = self.linkage.get_parameter(y_name)
         self.draw_axes()
-        self.draw_plot(show_configs)
+        self.draw_plot()
         
     def draw_axes(self):
         self.ax.set_xlim([self.x.min,self.x.max])
@@ -407,9 +407,7 @@ class EnergyPlot():
         self.ax.set_xlabel('{} ({})'.format(self.x.full_name, self.x.units))
         self.ax.set_ylabel('{} ({})'.format(self.y.full_name, self.y.units))
     
-    def draw_plot(self, show_configs=False):
-        if show_configs:
-            raise Exception('Debug this.')
+    def draw_plot(self):
         with self.linkage.solve_off():
             with self.linkage.manual_on():
                 x0 = self.linkage.get_parameter(self.x.full_name)().tolist()
