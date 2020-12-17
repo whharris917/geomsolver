@@ -185,7 +185,7 @@ class CalculatedAnteriorPoint(CalculatedPoint):
         if dr.dim() == 1:
             dr = dr.view(-1,3)
         beta = self.parent.params.beta()
-        if self.linkage.use_manual_params and self.linkage.use_explicit_coords:
+        if self.linkage.use_explicit_coords:
             beta = beta.view(-1,1)
         else:
             beta = beta.unsqueeze(beta.dim())
@@ -230,7 +230,7 @@ class CalculatedPosteriorPoint(CalculatedPoint):
         if dr.dim() == 1:
             dr = dr.view(-1,3)
         beta = self.parent.params.beta()
-        if self.linkage.use_manual_params and self.linkage.use_explicit_coords:
+        if self.linkage.use_explicit_coords:
             beta = beta.view(-1,1)
         else:
             beta = beta.unsqueeze(beta.dim())

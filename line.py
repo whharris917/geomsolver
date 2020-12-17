@@ -90,7 +90,7 @@ class FromPointsLine(Line):
         if self.is_length_constrained() and self.target_length is not None:
             r1 = self.p1.r
             r2 = self.p2.r
-            if not (self.linkage.use_manual_params and self.linkage.use_explicit_coords):
+            if not self.linkage.use_explicit_coords:
                 for d in range(r1.dim()-1):
                     r2 = r2.unsqueeze(0)
                     r1 = r1.unsqueeze(r1.dim()-1)

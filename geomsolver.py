@@ -187,6 +187,20 @@ class Linkage():
         yield
         self.solve = solve_0
     
+    @contextmanager
+    def explicit_on(self):
+        use_explicit_coords_0 = copy.deepcopy(self.use_explicit_coords)
+        self.use_explicit_coords = True
+        yield
+        self.use_explicit_coords = use_explicit_coords_0
+    
+    @contextmanager
+    def explicit_off(self):
+        use_explicit_coords_0 = copy.deepcopy(self.use_explicit_coords)
+        self.use_explicit_coords = False
+        yield
+        self.use_explicit_coords = use_explicit_coords_0
+    
     def get_parameter(self, full_param_name):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type == 'point':
