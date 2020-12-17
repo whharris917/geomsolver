@@ -185,10 +185,13 @@ class CalculatedAnteriorPoint(CalculatedPoint):
         if dr.dim() == 1:
             dr = dr.view(-1,3)
         beta = self.parent.params.beta()
-        beta = beta.unsqueeze(beta.dim())
-        for d in range(dr.dim()-1):
-            beta = beta.unsqueeze(0)
-            dr = dr.unsqueeze(dr.dim()-1)
+        if self.linkage.use_manual_params and self.linkage.use_explicit_coords:
+            beta = beta.view(-1,1)
+        else:
+            beta = beta.unsqueeze(beta.dim())
+            for d in range(dr.dim()-1):
+                beta = beta.unsqueeze(0)
+                dr = dr.unsqueeze(dr.dim()-1)
         r = self.parent.parent.r - beta * dr
         if not self.linkage.use_manual_params:
             r = r.squeeze()
@@ -227,10 +230,13 @@ class CalculatedPosteriorPoint(CalculatedPoint):
         if dr.dim() == 1:
             dr = dr.view(-1,3)
         beta = self.parent.params.beta()
-        beta = beta.unsqueeze(beta.dim())
-        for d in range(dr.dim()-1):
-            beta = beta.unsqueeze(0)
-            dr = dr.unsqueeze(dr.dim()-1)
+        if self.linkage.use_manual_params and self.linkage.use_explicit_coords:
+            beta = beta.view(-1,1)
+        else:
+            beta = beta.unsqueeze(beta.dim())
+            for d in range(dr.dim()-1):
+                beta = beta.unsqueeze(0)
+                dr = dr.unsqueeze(dr.dim()-1)
         r = self.parent.parent.r + (1-beta) * dr
         if not self.linkage.use_manual_params:
             r = r.squeeze()

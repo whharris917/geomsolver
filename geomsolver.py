@@ -34,6 +34,7 @@ class Linkage():
         self.tolerance = TOLERANCE
         self.step_size = STEP_SIZE
         self.use_manual_params = False
+        self.use_explicit_coords = False
         self.solve  = True
         self.wait = True
         self.fig_size = FIGSIZE
@@ -263,6 +264,9 @@ class Linkage():
         return(self.full_energy)
         
     def update(self, max_num_epochs=10000):
+        E = self.get_full_energy()
+        idx = (E==E.min()).to(torch.long).nonzero()
+        '''
         optimizer = torch.optim.SGD(self.get_torch_param_dict().values(), lr=LEARNING_RATE)
         for epoch in range(max_num_epochs):
             optimizer.zero_grad()
@@ -277,6 +281,7 @@ class Linkage():
         if False:
             if (E > self.tolerance or E.isnan()):
                 raise Exception('Could not solve all constraints.')
+        '''
         self.config_plot.update()
         time.sleep(0.01)
         
