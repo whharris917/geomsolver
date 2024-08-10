@@ -11,6 +11,8 @@ class BaseParameter(torch.nn.Module):
         self.locked = locked
         self._tensor = None
         self.tensor = tensor
+        self.is_constrained = False
+        self.target = None
         
     def __call__(self):
         if self.parent.linkage.use_manual_params:
@@ -48,6 +50,21 @@ class BaseParameter(torch.nn.Module):
         full_name = '{}.{}.{}'.format(self.parent.type, self.parent.name, self.name)
         return(full_name)
         
+    def constraint_E(self):
+        if self.is_constrained:
+            return((self.tensor-self.target).pow(2))
+        else:
+            return(0)
+           
+    def constrain(self, target):
+        self.is_constrained = True
+        self.target = target
+        self.parent.linkage.update()
+        
+    def unconstrained(self):
+        self.is_constrained = False
+        self.target = None
+        
     def lock(self):
         self.locked = True
         value = copy.deepcopy(self._tensor.tolist())
@@ -66,6 +83,31 @@ class BaseGeometry(torch.nn.Module):
         self.linkage = linkage
         self.name = name
         self.params = Munch({})
+    
+    def param_info(self):
+        if not self.params.values():
+            print('\t\tNo Parameters')
+            return()
+        print('\t\tLocked Parameters:')
+        counter = 0
+        for param in self.params.values():
+            if param.locked:
+                counter += 1
+                print('\t\t\t', param.name, '=', param.tensor)
+        if counter == 0:
+            print('\t\t\tNone')
+        print('\t\tFree Parameters:')
+        counter = 0
+        for param in self.params.values():
+            if not param.locked:
+                counter += 1
+                label = '{}({})'.format(repr(param.tensor)[:9],repr(param.tensor)[22:])
+                print('\t\t\t', param.name, '=', label, '########## is_constrained:', param.is_constrained)
+        if counter == 0:
+            print('\t\t\tNone')
+    
+    def info(self):
+        raise Exception('Override this property.')
     
     def __repr__(self):
         raise Exception('Override this method.')

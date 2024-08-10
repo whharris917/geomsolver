@@ -11,7 +11,7 @@ from settings import *
 class Line(BaseGeometry):
     def __init__(self, linkage, name):
         super(Line, self).__init__(linkage, name)
-        self.parent = None
+        #self.parent = None
         self.p1 = None
         self.p2 = None
         
@@ -60,8 +60,15 @@ class FromPointLine(Line):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
+    def info(self):
+        print('\t', self)
+        self.param_info()
+    
     def E(self):
-        return(0)
+        E = 0
+        for param in self.params.values():
+            E += param.constraint_E()
+        return(E)
     
     def is_length_constrained(self):
         return(True)
@@ -77,9 +84,13 @@ class FromPointsLine(Line):
         label = self.__class__.__name__[:-4]
         return('[{}]Line_{}(p1={}, p2={})'.format(label, self.name, self.p1.name, self.p2.name))
     
+    def info(self):
+        print('\t', self)
+        self.param_info()
+    
     def constrain_length(self, L):
-        if self.p1.root().__class__.__name__ is 'AnchorPoint':
-            if self.p2.root().__class__.__name__ is 'AnchorPoint':
+        if self.p1.root().__class__.__name__ == 'AnchorPoint':
+            if self.p2.root().__class__.__name__ == 'AnchorPoint':
                 raise Exception('Cannot constrain the length of a line with anchored endpoints.')
         self.target_length = L
         if self.linkage.solve:
@@ -95,7 +106,7 @@ class FromPointsLine(Line):
                     r2 = r2.unsqueeze(0)
                     r1 = r1.unsqueeze(r1.dim()-1)
             E = ((r2-r1).pow(2).sum(-1).pow(0.5)-self.target_length).pow(2)
-            E = E.pow(0.5)
+            #E = E.pow(0.5) ###########################################################
             if not self.linkage.use_manual_params:
                 E = E.squeeze()
             return(E)
@@ -104,9 +115,11 @@ class FromPointsLine(Line):
     def is_length_constrained(self):
         if self.target_length is not None:
             return(True)
-        elif self.p1.root().__class__.__name__ is 'AnchorPoint':
-            if self.p2.root().__class__.__name__ is 'AnchorPoint':
+        '''
+        elif self.p1.root().__class__.__name__ == 'AnchorPoint':
+            if self.p2.root().__class__.__name__ == 'AnchorPoint':
                 return(True)
+        '''
         return(False)
         
 class OnPointLine(Line):
@@ -130,8 +143,15 @@ class OnPointLine(Line):
     def __repr__(self):
         return('Debug this.')
     
+    def info(self):
+        print('\t', self)
+        self.param_info()  
+        
     def E(self):
-        return(0)
+        E = 0
+        for param in self.params.values():
+            E += param.constraint_E()
+        return(E)
     
     def is_length_constrained(self):
         return(True)
@@ -150,8 +170,15 @@ class OnPointsLine(Line):
     def __repr__(self):
         return('Debug this.')
     
+    def info(self):
+        print('\t', self)
+        self.param_info()
+    
     def E(self):
-        return(0)
+        E = 0
+        for param in self.params.values():
+            E += param.constraint_E()
+        return(E)
     
     def is_length_constrained(self):
         return(True)

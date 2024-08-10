@@ -42,6 +42,10 @@ class AtPoint(Point):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(at={})'.format(label, self.name, str(self.r.tolist())))
     
+    def info(self):
+        print('\t', self)
+        self.param_info()
+    
     @property
     def r(self):
         return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
@@ -63,6 +67,10 @@ class AnchorPoint(Point):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(at={})'.format(label, self.name, str(self.r.tolist())))
         
+    def info(self):
+        print('\t', self)
+        self.param_info()
+        
     @property
     def r(self):
         return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
@@ -81,6 +89,10 @@ class OnPointPoint(Point):
     def __repr__(self):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(on={})'.format(label, self.name, str(self.parent)))
+        
+    def info(self):
+        print('\t', self)
+        self.param_info()
         
     @property
     def r(self):
@@ -104,6 +116,10 @@ class ToPointPoint(Point):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(to={})'.format(label, self.name, str(self.parent)))
         
+    def info(self):
+        print('\t', self)
+        self.param_info()
+        
     @property
     def r(self):
         return(torch.cat([self.params.x(), self.params.y(), self.params.z()]))
@@ -118,6 +134,10 @@ class CalculatedPoint(Point):
     def __init__(self, linkage, name, parent):
         super(CalculatedPoint, self).__init__(linkage, name)
         self.parent = parent
+    
+    def info(self):
+        print('\t', self)
+        self.param_info()
     
     def get_dr(self):
         if self.parent.ux is None:
@@ -164,9 +184,13 @@ class CalculatedAlphaPoint(CalculatedPoint):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.p1)))
         
+    def info(self):
+        print('\t', self)
+        self.param_info()
+        
     @property
     def r(self):
-        raise Exception('Debug this.')
+        #raise Exception('Debug this.')
         dr = self.get_dr()
         r = self.parent.p1.r + dr
         return(r)
@@ -178,6 +202,10 @@ class CalculatedAnteriorPoint(CalculatedPoint):
     def __repr__(self):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
+        
+    def info(self):
+        print('\t', self)
+        self.param_info()
         
     @property
     def r(self):
@@ -205,9 +233,13 @@ class CalculatedAnteriorGammaPoint(CalculatedPoint):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
         
+    def info(self):
+        print('\t', self)
+        self.param_info()
+        
     @property
     def r(self):
-        raise Exception('Debug this.')
+        #raise Exception('Debug this.')
         gamma = self.parent.params.gamma()
         gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
         dr = self.parent.parent2.r - self.parent.parent1.r
@@ -223,7 +255,11 @@ class CalculatedPosteriorPoint(CalculatedPoint):
     def __repr__(self):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
-        
+   
+    def info(self):
+        print('\t', self)
+        self.param_info()
+
     @property
     def r(self):
         dr = self.get_dr()
@@ -250,9 +286,13 @@ class CalculatedPosteriorGammaPoint(CalculatedPoint):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(from={})'.format(label, self.name, str(self.parent.parent)))
     
+    def info(self):
+        print('\t', self)
+        self.param_info()
+    
     @property
     def r(self):
-        raise Exception('Debug this.')
+        #raise Exception('Debug this.')
         gamma = self.parent.params.gamma()
         gamma = 0.5*(1+torch.tanh(10*(gamma-0.5)))
         dr = self.parent.parent2.r - self.parent.parent1.r
@@ -271,6 +311,10 @@ class OnLinePoint(Point):
     def __repr__(self):
         label = self.__class__.__name__[:-5]
         return('[{}]Point_{}(on={})'.format(label, self.name, str(self.parent)))
+    
+    def info(self):
+        print('\t', self)
+        self.param_info()
     
     @property
     def r(self):

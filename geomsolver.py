@@ -3,46 +3,61 @@ from scipy import optimize
 import torch, itertools, string, time, copy, math
 from contextlib import contextmanager
 from munch import Munch
-from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
-from line import FromPointLine, FromPointsLine, OnPointLine, OnPointsLine
-from ipywidgets import interact, interactive, fixed, interact_manual
+from ipywidgets import interact, interactive, fixed, interact_manual, widgets
 from ipywidgets import Button, Layout, jslink, IntText, IntSlider, GridspecLayout
-import ipywidgets as widgets
+import IPython
 from IPython.display import display
-import ipywidgets as widgets
 import matplotlib.pyplot as plt
 from settings import *
-from param import Parameter
+from point import AtPoint, AnchorPoint, OnPointPoint, ToPointPoint, OnLinePoint
+from line import FromPointLine, FromPointsLine, OnPointLine, OnPointsLine
+import pandas as pd
 
 class Linkage():
     def __init__(self):       
         self.points = Munch(torch.nn.ModuleDict({}))
         self.lines = Munch(torch.nn.ModuleDict({}))
+
         self.names = {}
         for _type in ['point', 'line']:
             self.names[_type] = []
             letters = string.ascii_letters[-26:]
-            if _type is 'line':
+            if _type == 'line':
                 letters = letters.lower()
             for n in range(3):
                 for t in itertools.product(letters, repeat=n):
                     self.names[_type].append(''.join(t))
             self.names[_type] = iter(self.names[_type][1:])
-        self.grid = None
-        self.config_plot = None
-        self.energy_plot = None
+        
         self.tolerance = TOLERANCE
         self.step_size = STEP_SIZE
+        self.fig_size = FIGSIZE
+        self.num_param_steps = NUM_PARAM_STEPS
+        
+        self.grid = None
         self.use_manual_params = False
         self.use_explicit_coords = False
         self.solve  = True
         self.wait = True
-        self.fig_size = FIGSIZE
-        self.num_param_steps = NUM_PARAM_STEPS
+        self.one_shot_solve = False
+        
+        self.fig = None
+        self.config_plot = None
+        self.energy_plot = None
         self.create_plots()
+        
         self.full_energy = None
         self.energy_updated = False
         #self.show_controllers(wait=True)
+        
+        self.info_box = widgets.Output(layout={'border': '1px solid black'})
+        self.update_info_box()
+        display(self.info_box)
+        
+        self.controller_box = widgets.Output(layout={'border': '1px solid black'})
+        with self.controller_box:
+            self.show_controllers(wait=True)
+        display(self.controller_box)
         
     ################################# Plots and Controllers ################################
     
@@ -50,14 +65,14 @@ class Linkage():
         self.fig = plt.figure(figsize=(2*self.fig_size,self.fig_size))
         self.config_plot = LinkagePlot(self, show_origin=False)
         self.energy_plot = EnergyPlot(self)
-        
+    
     def create_grid(self):
         self.grid = GridspecLayout(5, 10, height='150px', width='850px')
         self.grid[:-1,:5] = widgets.Output()
         self.grid[:-1,5:] = widgets.Output()
         self.grid[-1,:] = self.create_refresh_button()
         display(self.grid)
-        
+
     def show_controllers(self, create_grid=True, wait=True):
         self.wait = wait
         if create_grid:
@@ -66,17 +81,17 @@ class Linkage():
             self.show_controller(self.wait)
         with self.grid[0,-1]:
             self.energy_plot.show_controller(self.wait)
-        
-    def refresh_plots(self, button):
+
+    def refresh_controller(self, button=None):
         self.grid[:-1,:5].clear_output()
         self.grid[:-1,5:].clear_output()
         self.show_controllers(create_grid=False, wait=self.wait)
-    
+
     def create_refresh_button(self):
         refresh_button = widgets.Button(
             description='Refresh', button_style='success',
             layout=Layout(height='auto', width='auto'))            
-        refresh_button.on_click(self.refresh_plots)
+        refresh_button.on_click(self.refresh_controller)
         return(refresh_button)
     
     ######################################## Points ########################################
@@ -86,6 +101,8 @@ class Linkage():
         self.points[name] = AtPoint(self, name, at)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.points[name])
     
     def add_anchorpoint(self, at):
@@ -93,6 +110,8 @@ class Linkage():
         self.points[name] = AnchorPoint(self, name, at)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.points[name])
     
     def add_onpointpoint(self, parent):
@@ -100,6 +119,8 @@ class Linkage():
         self.points[name] = OnPointPoint(self, name, parent)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.points[name])
     
     def add_topointpoint(self, at, parent):
@@ -107,6 +128,8 @@ class Linkage():
         self.points[name] = ToPointPoint(self, name, at, parent)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.points[name])
     
     def add_onlinepoint(self, parent, alpha=None):
@@ -114,6 +137,8 @@ class Linkage():
         self.points[name] = OnLinePoint(self, name, parent, alpha)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.points[name])
     
     ######################################## Lines #########################################
@@ -123,6 +148,8 @@ class Linkage():
         self.lines[name] = FromPointLine(self, name, parent, L, theta, phi, ux, uz, locked)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.lines[name])
     
     def add_frompointsline(self, parent1, parent2):
@@ -130,6 +157,8 @@ class Linkage():
         self.lines[name] = FromPointsLine(self, name, parent1, parent2)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.lines[name])
     
     def add_onpointline(self, parent, L, theta, phi=None, ux=None, uz=None, beta=None):
@@ -137,6 +166,8 @@ class Linkage():
         self.lines[name] = OnPointLine(self, name, parent, L, theta, phi, ux, uz, beta)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.lines[name])
         
     def add_onpointsline(self, parent1, parent2, L, gamma=None):
@@ -144,10 +175,90 @@ class Linkage():
         self.lines[name] = OnPointsLine(self, name, parent1, parent2, L, gamma)
         self.config_plot.update()
         self.energy_updated = False
+        self.update_info_box()
+        self.refresh_controller()
         return(self.lines[name]) 
         
     ########################################################################################
         
+    def update_info_box(self):
+        self.info_box.clear_output()
+        with self.info_box:
+            self.get_state()
+        
+    def get_state(self):
+        print('use_manual_params: {}'.format(self.use_manual_params))
+        print('use_explicit_coords: {}'.format(self.use_explicit_coords))
+        print('solve: {}'.format(self.solve))
+        print('energy_updated: {}'.format(self.energy_updated))
+        print('wait: {}'.format(self.wait))
+        print('one_shot_solve: {}\n'.format(self.one_shot_solve))
+        self.info()
+        
+    def info(self):
+        print('Points')
+        if not bool(list(self.points.values())):
+            print('\tNone')
+        for point in self.points.values():
+            point.info()
+        print('Lines')
+        if not bool(list(self.lines.values())):
+            print('\tNone')
+        for line in self.lines.values():
+            line.info()
+            
+    def get_df(self):
+        df = pd.DataFrame(columns=
+                          ['Full Name', 
+                           'Type', 
+                           'Geometry', 
+                           'Parameter Name', 
+                           'Parameter Value', 
+                           'Locked?', 
+                           'Constrained?',
+                           'Constraint Target',
+                           'Energy'])
+        for geom_type in ['point', 'line']:
+            if geom_type == 'point':
+                geoms = self.points
+            else:
+                geoms = self.lines
+            for geom in geoms.values():
+                constraint_target = None
+                if geom.type == 'line':
+                    try:
+                        constraint_target = geom.target_length
+                    except:
+                        pass
+                param_dict = {
+                    'Full Name': [geom.name],
+                    'Type': [geom.type],
+                    'Geometry': [geom.__repr__()],
+                    'Parameter Name': [None],
+                    'Parameter Value': [None],
+                    'Locked?': [None],
+                    'Constrained?': [geom.is_length_constrained() if geom.type == 'line' else None],
+                    'Constraint Target': [constraint_target],
+                    'Energy': geom.E()
+                }
+                df = pd.concat([df, pd.DataFrame(param_dict)])
+                for param in geom.params.values():
+                    full_param_name = '{}.{}'.format(geom.name, param.name)
+                    param_dict = {
+                        'Full Name': [full_param_name],
+                        'Type': [geom.type],
+                        'Geometry': [geom.__repr__()],
+                        'Parameter Name': [param.name],
+                        'Parameter Value': [param.tensor.__repr__()],
+                        'Locked?': [param.locked],
+                        'Constrained?': [param.is_constrained],
+                        'Constraint Target': [param.target],
+                        'Energy': geom.E()
+                    }
+                    df = pd.concat([df, pd.DataFrame(param_dict)])
+        df = df.set_index ('Full Name')
+        return(df)
+       
     @property
     def N(self):
         N = 0
@@ -158,7 +269,7 @@ class Linkage():
     @property
     def M(self):
         return(len(self.lines))
-    
+
     @contextmanager
     def manual_on(self):
         use_manual_params_0 = copy.deepcopy(self.use_manual_params)
@@ -172,6 +283,13 @@ class Linkage():
         self.use_manual_params = False
         yield
         self.use_manual_params = use_manual_params_0
+        
+    @contextmanager
+    def one_shot_solve(self):
+        one_shot_solve_0 = copy.deepcopy(self.one_shot_solve)
+        self.one_shot_solve = True
+        yield
+        self.one_shot_solve = one_shot_solve_0
     
     @contextmanager
     def solve_on(self):
@@ -186,7 +304,7 @@ class Linkage():
         self.solve = False
         yield
         self.solve = solve_0
-    
+     
     @contextmanager
     def explicit_on(self):
         use_explicit_coords_0 = copy.deepcopy(self.use_explicit_coords)
@@ -200,7 +318,7 @@ class Linkage():
         self.use_explicit_coords = False
         yield
         self.use_explicit_coords = use_explicit_coords_0
-    
+
     def get_parameter(self, full_param_name):
         obj_type, obj_name, param_name = full_param_name.split('.')
         if obj_type == 'point':
@@ -220,24 +338,18 @@ class Linkage():
             raise Exception('Object type must be point or line.')
         obj.set_parameter(param_name, value)
         self.energy_plot.update_status_point()
+        '''
         if not self.use_manual_params:
             if self.energy_plot.x_widget is not None:
                 self.energy_plot.update(
                     x_name=self.energy_plot.x_widget.value,
                     y_name=self.energy_plot.y_widget.value)
-       
+        '''
+    
     def get_param_dict(self, get_torch_params=False):
         parameters = {}
-        for point in self.points.values():
-            for param in point.params.values():
-                if param.locked:
-                    continue
-                if get_torch_params and bool(list(param.parameters())):
-                    parameters[param.full_name] = list(param.parameters())[0]
-                elif not get_torch_params:
-                    parameters[param.full_name] = param
-        for line in self.lines.values():
-            for param in line.params.values():
+        for geom in list(self.points.values())+list(self.lines.values()):
+            for param in geom.params.values():
                 if param.locked:
                     continue
                 if get_torch_params and bool(list(param.parameters())):
@@ -251,10 +363,8 @@ class Linkage():
         
     def energy(self):
         E = 0.0
-        for point in self.points.values():
-            E += point.E()
-        for line in self.lines.values():
-            E += line.E()
+        for geom in list(self.points.values())+list(self.lines.values()):
+            E += geom.E()
         return(E)
         
     def _energy(self):
@@ -262,42 +372,51 @@ class Linkage():
             return(self.energy())
         
     def get_full_energy(self):
-        if self.energy_updated:
-            return(self.full_energy)
-        with self.manual_on():
-            x0 = {}
-            for x in self.get_param_dict().values():
-                x0[x.full_name] = x().tolist()
-                v = np.linspace(x.min, x.max, self.num_param_steps)
-                self.set_parameter(x.full_name, v.tolist())
-            E = self._energy()
-            for x in self.get_param_dict().values():
-                self.set_parameter(x.full_name, x0[x.full_name])
-        self.full_energy = E
-        self.energy_updated = True
+        with self.solve_off():
+            if self.energy_updated:
+                return(self.full_energy)
+            with self.manual_on():
+                x0 = {}
+                for x in self.get_param_dict().values():
+                    x0[x.full_name] = x().tolist()
+                    v = np.linspace(x.min, x.max, self.num_param_steps)
+                    self.set_parameter(x.full_name, v.tolist())
+                E = self._energy()
+                for x in self.get_param_dict().values():
+                    self.set_parameter(x.full_name, x0[x.full_name])
+            self.full_energy = E
+            self.energy_updated = True
         return(self.full_energy)
         
     def update(self, max_num_epochs=10000):
-        E = self.get_full_energy()
-        idx = (E==E.min()).to(torch.long).nonzero()
-        '''
+        #E = self.get_full_energy()
+        #idx = (E==E.min()).to(torch.long).nonzero()
         optimizer = torch.optim.SGD(self.get_torch_param_dict().values(), lr=LEARNING_RATE)
-        for epoch in range(max_num_epochs):
-            optimizer.zero_grad()
-            E = self.energy()
-            E.backward()
-            optimizer.step()
-            if E <= self.tolerance:
-                break
-            if epoch % N_UPDATE == 0:
-                self.config_plot.update()
-                time.sleep(0.01)
-        if False:
-            if (E > self.tolerance or E.isnan()):
-                raise Exception('Could not solve all constraints.')
-        '''
-        self.config_plot.update()
-        time.sleep(0.01)
+        if self.one_shot_solve:
+            raise Exception()
+        else:
+            for epoch in range(max_num_epochs):
+                optimizer.zero_grad()
+                E = self.energy()
+                try:
+                    E.backward()
+                except:
+                    print('breaking')
+                    break
+                optimizer.step()
+                #print('E =', E.item())
+                if E <= self.tolerance:
+                    break
+                if epoch % N_UPDATE == 0:
+                    #print('updating')
+                    self.config_plot.update()
+                    time.sleep(0.01)
+            if False:
+                if (E > self.tolerance or E.isnan()):
+                    raise Exception('Could not solve all constraints.')
+            self.config_plot.update()
+            self.update_info_box()
+            time.sleep(0.01)
         
     def update_param_bounds(self, *args):
         param = self.get_parameter(self.param_name_widget.value)
@@ -357,7 +476,7 @@ class LinkagePlot():
     def update(self):
         with self.linkage.manual_off():
             for point_name in self.linkage.points.keys():
-                if self.linkage.points[point_name].__class__.__name__ is 'AnchorPoint':
+                if self.linkage.points[point_name].__class__.__name__ == 'AnchorPoint':
                     color = 'blue'
                     size = 150
                 else:
@@ -369,7 +488,7 @@ class LinkagePlot():
                     self.points[point_name] = point
                 point = self.linkage.points[point_name]
                 self.points[point_name].set_offsets(
-                    [[point.r[0],point.r[1]]])
+                    [[point.r[0].detach().numpy(),point.r[1].detach().numpy()]])
             for line_name in self.linkage.lines.keys():
                 ls, lw = ':', 1
                 if self.linkage.lines[line_name].is_length_constrained():
@@ -381,33 +500,34 @@ class LinkagePlot():
                     self.lines[line_name] = line
                 line = self.linkage.lines[line_name]
                 self.lines[line_name].set_data(
-                    [line.p1.r[0],line.p2.r[0]],
-                    [line.p1.r[1],line.p2.r[1]])
+                    [line.p1.r[0].item(),line.p2.r[0].item()],
+                    [line.p1.r[1].item(),line.p2.r[1].item()])
                 self.lines[line_name].set_linestyle(ls)
                 self.lines[line_name].set_linewidth(lw)
+                
                 for p in [line.p1, line.p2]:
                     if p.name not in self.points.keys():
                         point = self.ax.scatter([], [],
                             s=10, c='red', zorder=0, label=p.name)
                         self.points[p.name] = point
                     self.points[p.name].set_offsets(
-                        [[p.r[0],p.r[1]]])
+                        [[p.r[0].detach().numpy(),p.r[1].detach().numpy()]])
         #self.time_text.set_text('')
-        #self.linkage.fig.canvas.draw()
-        
+        self.linkage.fig.canvas.draw() ########################################## UNCOMMENTED
+
 class EnergyPlot():
     def __init__(self, linkage):
         self.linkage = linkage
         #self.fig_size = FIGSIZE
         #self.fig_lim = FIGLIM
-        self.num_param_steps = NUM_PARAM_STEPS
-        self.num_contour_levels = NUM_CONTOUR_LEVELS
-        self.cmap = CMAP
-        self.x = None
-        self.y = None
+        #self.num_param_steps = NUM_PARAM_STEPS
+        #self.num_contour_levels = NUM_CONTOUR_LEVELS
+        #self.cmap = CMAP
+        #self.x = None
+        #self.y = None
         self.build_plot()
-        self.x_widget = None
-        self.y_widget = None
+        #self.x_widget = None
+        #self.y_widget = None
         
     def build_plot(self):
         #self.fig = plt.figure(figsize=(self.fig_size,self.fig_size))
